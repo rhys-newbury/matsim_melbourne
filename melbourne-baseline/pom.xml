@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>io.github.matsimmelbourne</groupId>
+    <artifactId>baseline-project</artifactId>
+    <version>1.0-SNAPSHOT</version>
+
+    <name>MATSim Melbourne baseline project</name>
+    <description>The baseline MATSim model for Melbourne</description>
+
+    <properties>
+      <matsim.version>2026.0</matsim.version>
+      <maven.compiler.source>25</maven.compiler.source>
+      <maven.compiler.target>25</maven.compiler.target>
+      <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <licenses>
+      <license>
+        <name>GNU General Lesser Public License, Version 3.0</name>
+        <url>http://www.gnu.org/licenses/lgpl-3.0.html</url>
+      </license>
+    </licenses>
+
+    <repositories>
+      <!--Note that in general repositories are not transitive, so they need to be repeated at every level where needed.-->
+      <repository>
+        <!-- Geotools is not on Maven central -->
+        <id>osgeo</id>
+        <name>Geotools repository</name>
+        <!--<url>http://download.osgeo.org/webdav/geotools</url>-->
+        <url>https://repo.osgeo.org/repository/release/</url>
+      </repository>
+      <repository>
+        <!-- For MATSim releases: -->
+        <id>matsim</id>
+        <url>https://repo.matsim.org/repository/matsim</url>
+      </repository>
+      <repository>
+        <!-- for dependencies of osm-network-reader -->
+        <id>topobyte</id>
+        <url>https://mvn.topobyte.de</url>
+      </repository>
+      <repository>
+        <!-- for dependencies of osm-network-reader -->
+        <id>slimjars</id>
+        <url>https://mvn.slimjars.com</url>
+      </repository>
+    </repositories>
+
+    <dependencies>
+
+      <!--MATSim core:-->
+      <dependency>
+        <groupId>org.matsim</groupId>
+        <artifactId>matsim</artifactId>
+        <version>${matsim.version}</version>
+        <exclusions>
+          <exclusion>
+            <artifactId>guava</artifactId>
+            <groupId>com.google.guava</groupId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+
+      <!-- to get MatsimTestUtils -->
+      <dependency>
+        <groupId>org.matsim</groupId>
+        <artifactId>matsim</artifactId>
+        <type>test-jar</type>
+        <exclusions>
+          <exclusion>
+            <artifactId>guava</artifactId>
+            <groupId>com.google.guava</groupId>
+          </exclusion>
+        </exclusions>
+        <version>${matsim.version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <!--to get ExamplesUtils:-->
+      <dependency>
+        <groupId>org.matsim</groupId>
+        <artifactId>matsim-examples</artifactId>
+        <version>${matsim.version}</version>
+      </dependency>
+
+      <!-- Include some MATSim extensions -->
+      <dependency>
+        <groupId>org.matsim.contrib</groupId>
+        <artifactId>minibus</artifactId>
+        <version>${matsim.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.matsim.contrib</groupId>
+        <artifactId>otfvis</artifactId>
+        <version>${matsim.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.matsim.contrib</groupId>
+        <artifactId>roadpricing</artifactId>
+        <version>${matsim.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.matsim.contrib</groupId>
+        <artifactId>taxi</artifactId>
+        <version>${matsim.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.matsim.contrib</groupId>
+        <artifactId>av</artifactId>
+        <version>${matsim.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.matsim.contrib</groupId>
+        <artifactId>freight</artifactId>
+        <version>${matsim.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.matsim.contrib</groupId>
+        <artifactId>bicycle</artifactId>
+        <version>${matsim.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.matsim.contrib</groupId>
+        <artifactId>osm</artifactId>
+        <version>${matsim.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.matsim.contrib</groupId>
+        <artifactId>sbb-extensions</artifactId>
+        <version>${matsim.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-csv</artifactId>
+        <version>1.12.0</version>
+      </dependency>
+
+      <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-math3</artifactId>
+        <version>3.6.1</version>
+      </dependency>
+
+      <!-- Include the JUnit testing library -->
+      <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>4.13.1</version>
+        <scope>test</scope>
+      </dependency>
+    </dependencies>
+
+    <build>
+      <plugins>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>license-maven-plugin</artifactId>
+          <version>2.0.0</version>
+          <configuration>
+            <organizationName>MATSim Melbourne</organizationName>
+            <copyrightOwners>by its authors.</copyrightOwners>
+            <projectName>Example Project</projectName>
+            <inceptionYear>2020</inceptionYear>
+            <licenseName>lgpl_v3</licenseName>
+            <outputDirectory>${project.basedir}</outputDirectory>
+            <thirdPartyFilename>THIRD-PARTY.txt</thirdPartyFilename>
+            <canUpdateLicense>true</canUpdateLicense>
+            <canUpdateCopyright>true</canUpdateCopyright>
+            <canUpdateDescription>true</canUpdateDescription>
+          </configuration>
+          <executions>
+            <execution>
+              <id>first</id>
+              <goals>
+                <goal>update-project-license</goal>
+                <goal>update-file-header</goal>
+                <goal>add-third-party</goal>
+              </goals>
+              <phase>process-sources</phase>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-shade-plugin</artifactId>
+          <version>3.6.0</version>
+          <executions>
+            <execution>
+              <phase>package</phase>
+              <goals>
+                <goal>shade</goal>
+              </goals>
+              <configuration>
+                <finalName>baseline-project-1.0-SNAPSHOT</finalName>
+                <createDependencyReducedPom>false</createDependencyReducedPom>
+                <filters>
+                  <filter>
+                    <artifact>*:*</artifact>
+                    <excludes>
+                      <exclude>META-INF/*.SF</exclude>
+                      <exclude>META-INF/*.DSA</exclude>
+                      <exclude>META-INF/*.RSA</exclude>
+                      <exclude>META-INF/*.EC</exclude>
+                    </excludes>
+                  </filter>
+                </filters>
+                <transformers>
+                  <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                    <manifestEntries>
+                      <Main-Class>io.github.matsimmelbourne.baseline.run.RunBaselineScenario</Main-Class>
+                    </manifestEntries>
+                  </transformer>
+                  <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                </transformers>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.14.0</version>
+          <configuration>
+            <release>25</release>
+            <showWarnings>false</showWarnings>
+            <showDeprecation>false</showDeprecation>
+            <encoding>UTF-8</encoding>
+          </configuration>
+        </plugin>
+      </plugins>
+    </build>
+
+</project>

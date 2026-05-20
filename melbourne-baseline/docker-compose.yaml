@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  service:
+      volumes:
+        - ./:/app
+        - /tmp/.X11-unix:/tmp/.X11-unix
+        - ~/.Xauthority:/root/.Xauthority
+        - ~/.bash_history:/home/user/.bash_history
+        - ~/.gitconfig:/etc/gitconfig
+        - ~/.ssh:/home/user/.ssh
+
+      network_mode: "host"
+      build:
+        dockerfile: Dockerfile
+        context: .
+      image: melbourne-baseline:latest
+
+      tty: true
+      stdin_open: true
+      privileged: true
+      restart: unless-stopped
+
+      environment:
+        - DISPLAY=:0
+        - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}

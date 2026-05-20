@@ -1,0 +1,8 @@
+target/
+output/
+*.log
+.DS_Store
+LICENSE.txt
+THIRD-PARTY.txt
+scenario/
+*.sif
