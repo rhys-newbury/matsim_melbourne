@@ -1,25 +1,4 @@
 package io.github.matsimmelbourne.baseline.run;
-/*-
- * #%L
- * Example Project
- * %%
- * Copyright (C) 2020 - 2026 by its authors.
- * %%
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Lesser Public License for more details.
- *
- * You should have received a copy of the GNU General Lesser Public
- * License along with this program.  If not, see
- * <http://www.gnu.org/licenses/lgpl-3.0.html>.
- * #L%
- */
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -40,8 +19,6 @@ import java.util.stream.Collectors;
  *  - If attached link is bicycle-only -> remove link
  *  - Otherwise remove bicycle from allowed modes
  *  - Repeat until stable
- *
- * Supports dry-run mode.
  */
 public class DeadEndFilter {
 
@@ -63,10 +40,9 @@ public class DeadEndFilter {
      * Cleans bicycle dead ends.
      *
      * @param network MATSim network
-     * @param dryRun if true, does not mutate network
-     * @return list of actions taken (or that would be taken)
+     * @return list of actions taken
      */
-    public static List<RemovalAction> clean(Network network, boolean dryRun) {
+    public static List<RemovalAction> clean(Network network) {
 
         List<RemovalAction> actions = new ArrayList<>();
 
@@ -90,6 +66,7 @@ public class DeadEndFilter {
 
             log.info("Bicycle nodes: {}, dead-end nodes: {}, share: {}%",
                     bikeNodes, deadNodes.size(), 100.0 * deadNodes.size() / bikeNodes);
+
             Set<Id<Link>> processedLinks = new HashSet<>();
 
             for (Node node : deadNodes) {
@@ -113,7 +90,7 @@ public class DeadEndFilter {
                                 link.getId(),
                                 link.getFromNode().getId(),
                                 link.getToNode().getId(),
-                                dryRun ? "WOULD_REMOVE_LINK" : "REMOVED_LINK",
+                                "REMOVED_LINK",
                                 Set.copyOf(oldModes),
                                 Set.of(),
                                 "bicycle dead-end; bicycle-only link"
@@ -123,9 +100,7 @@ public class DeadEndFilter {
 
                         logAction(action);
 
-                        if (!dryRun) {
-                            network.removeLink(link.getId());
-                        }
+                        network.removeLink(link.getId());
 
                         changed = true;
 
@@ -139,7 +114,7 @@ public class DeadEndFilter {
                                 link.getId(),
                                 link.getFromNode().getId(),
                                 link.getToNode().getId(),
-                                dryRun ? "WOULD_REMOVE_BICYCLE" : "REMOVED_BICYCLE",
+                                "REMOVED_BICYCLE",
                                 Set.copyOf(oldModes),
                                 Set.copyOf(newModes),
                                 "bicycle dead-end; preserving other modes"
@@ -149,9 +124,7 @@ public class DeadEndFilter {
 
                         logAction(action);
 
-                        if (!dryRun) {
-                            link.setAllowedModes(newModes);
-                        }
+                        link.setAllowedModes(newModes);
 
                         changed = true;
                     }
@@ -159,18 +132,15 @@ public class DeadEndFilter {
             }
 
             // remove isolated nodes
-            if (!dryRun) {
+            List<Id<Node>> emptyNodes = network.getNodes().values().stream()
+                    .filter(n -> n.getInLinks().isEmpty() && n.getOutLinks().isEmpty())
+                    .map(Node::getId)
+                    .collect(Collectors.toList());
 
-                List<Id<Node>> emptyNodes = network.getNodes().values().stream()
-                        .filter(n -> n.getInLinks().isEmpty() && n.getOutLinks().isEmpty())
-                        .map(Node::getId)
-                        .collect(Collectors.toList());
+            emptyNodes.forEach(network::removeNode);
 
-                emptyNodes.forEach(network::removeNode);
-
-                if (!emptyNodes.isEmpty()) {
-                    log.info("Removed {} isolated nodes", emptyNodes.size());
-                }
+            if (!emptyNodes.isEmpty()) {
+                log.info("Removed {} isolated nodes", emptyNodes.size());
             }
 
             log.info("Finished iteration {} with {} actions", iteration, actions.size());

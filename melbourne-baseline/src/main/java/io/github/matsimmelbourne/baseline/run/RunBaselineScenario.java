@@ -84,7 +84,7 @@ public class RunBaselineScenario {
         });
 
         System.out.println("Applying bicycle dead-end filter");
-        DeadEndFilter.clean(network, false);
+        DeadEndFilter.clean(network);
 
         System.out.println("Cleaning bicycle network");
 
