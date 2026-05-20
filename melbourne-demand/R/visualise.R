@@ -15,6 +15,6 @@ legs <- read.csv("mel2016popn100pax.xml.legs.csv") %>%
   st_as_sf(wkt = "geom", crs = 28355) %>%
   dplyr::select(X,personId,origin_act_id,dest_act_id,mode,geom) %>%
   mutate(length=round(as.numeric(st_length(geom))))
-  
+
 st_write(acts,"population.gpkg",delete_layer=TRUE,layer="acts")
 st_write(legs,"population.gpkg",delete_layer=TRUE,layer="legs")

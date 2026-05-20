@@ -40,9 +40,9 @@ for (act in groups) {
   rowid<-rowid+1
 }
 
-gg<-ggplot(pp, aes(x=Expected, y=Actual)) + 
+gg<-ggplot(pp, aes(x=Expected, y=Actual)) +
   geom_abline(aes(colour='red', slope = 1, intercept=0)) +
-  geom_point(colour = 'blue', fill='blue', size=3, shape=21, alpha=0.3) + 
+  geom_point(colour = 'blue', fill='blue', size=3, shape=21, alpha=0.3) +
   theme(legend.position="none") + theme(plot.title = element_text(hjust = 0.5)) +
   ggtitle(paste0('Activity Start Time Probabilities in ',binSizeInMins,'-Min Bins')) +
   facet_wrap(~Activity, scales="free", ncol=2)

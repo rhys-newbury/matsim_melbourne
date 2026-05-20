@@ -26,5 +26,3 @@ In more detail:
 4. Open the extracted 'persons.csv' of the next SA2 on a new Ms Excel window
 5. Copy all the person rows in the newly opened file (step 4) except for the title row and append them to the persons rows of the file created in step 1 by pasting.
 6. Repeat steps 4 and 5 for all the SA2s in the subset.
-
-

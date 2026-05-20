@@ -6,7 +6,7 @@ locatePlans <- function(censuscsv, vistacsv, matchcsv, outdir, outcsv, rseed = N
   # outdir    <- '../output/5.locate'
   # outcsv    <- '../output/5.locate/plan.csv'
   # planGroup=1
-  
+
 calculatePlanSubset <- function(outdir,planGroup,plans) {
   setDTthreads(1) # only one thread for data.table since we'll be operating in parallel
   # read in all distances
@@ -17,8 +17,8 @@ calculatePlanSubset <- function(outdir,planGroup,plans) {
   destinationCountsCurrent<-data.frame(sa3_code_2016=c(20601:20607,20701:20703,20801:20804,20901:20904,21001:21005,
                                                     21101:21105,21201:21205,21301:21305,21401,21402),
                                     commercial_count=0,education_count=0,park_count=0,work_count=0)
-  
-  
+
+
   # wplans<-NULL
   pp<-plans%>%filter(ceiling(PlanId/1000)==planGroup)#%>%dplyr::mutate(Activity=0,AgentId=0)
   # plans with 1 or 2 entries are automatically discarded.
@@ -46,8 +46,8 @@ calculatePlanSubset <- function(outdir,planGroup,plans) {
       destinationCountsCurrent[currentSA3,currentDestination]<-destinationCountsCurrent[currentSA3,currentDestination]+1
       destinationCounts[currentSA3,currentDestination]<-destinationCounts[currentSA3,currentDestination]+1
     }
-    
-    
+
+
     # if at home
     # if LocationType_{i}==home and LocationType_{i+1}!=home
     if(pp[i,"LocationType"] == "home" & pp[i+1,"LocationType"] != "home") {
@@ -55,10 +55,10 @@ calculatePlanSubset <- function(outdir,planGroup,plans) {
       anchor_region<-FALSE
       # primary_mode <- chooseMode( SA1_MAINCODE_2016_{i} )
       primary_mode<-chooseMode(pp[i,"SA1_MAINCODE_2016"]) # SA1_MAINCODE_2016_{i} choose a new mode
-      
+
       # ArrivingMode_{i+1} <- primary_mode
       pp[i+1,"ArrivingMode"] <- primary_mode
-      
+
       # validRegions<-getValidRegions(SA1_MAINCODE_2016_{nextHome}, primary_mode, nextHome-i)
       validRegions<-getValidRegions(pp[nextHome,6], primary_mode, nextHome-i)
       #validProportion=sum(validRegions,na.rm=T)/length(validRegions)
@@ -68,7 +68,7 @@ calculatePlanSubset <- function(outdir,planGroup,plans) {
                                                            pp[i+1,"LocationType"],    # LocationType_{i+1}
                                                            primary_mode,              # primary_mode
                                                            validRegions)              # allowedSA1
-      
+
       # ArrivingMode_{nextHome} <- primary_mode i.e. set the arriving mode of the next home region
       pp[nextHome,"ArrivingMode"] <- primary_mode
     }
@@ -76,7 +76,7 @@ calculatePlanSubset <- function(outdir,planGroup,plans) {
     if( pp[i,"LocationType"] != "home" & (nextHome-i>2 | (nextHome-i==2 & primary_mode%in%c('walk','pt'))) ) {
       # ArrivingMode_{i+1} <- chooseMode( SA1_MAINCODE_2016_{i}, primary_mode, anchor_region )
       pp[i+1,"ArrivingMode"] <- chooseMode(pp[i,"SA1_MAINCODE_2016"], primary_mode, anchor_region)
-      
+
       # setting anchor region and mode needed to get there
       if(anchor_region==FALSE & primary_mode%in%c('bike','car') & primary_mode!=pp[i+1,"ArrivingMode"]) {
         # set the region before home to the current region
@@ -92,7 +92,7 @@ calculatePlanSubset <- function(outdir,planGroup,plans) {
         # ArrivingMode_{nextHome} <- 'pt'
         pp[nextHome,"ArrivingMode"] <- 'pt'
       }
-      
+
       if(anchor_region==TRUE) {
         # valid regions are the ones reachable within the remaining steps to the
         # anchor region (the one before the next home region) using the anchor
@@ -136,7 +136,7 @@ calculatePlanSubset <- function(outdir,planGroup,plans) {
                                                            primary_mode,
                                                            validRegions)
     }
-      
+
     # if the next LocationType isn't home, calculate distance
     if( pp[i,"LocationType"] != 'home' | (pp[i,"LocationType"] == 'home' & pp[i+1,"LocationType"] != 'home') ) {
       # Distance_{i+1} <- calcDistance( Distance_{i}, Distance_{i+1} )
@@ -149,7 +149,7 @@ calculatePlanSubset <- function(outdir,planGroup,plans) {
         pp[i,"Distance"] <- currentDistance
       }
     }
-    
+
     # if SA1_MAINCODE_2016_{i+1} is null
     if(pp[i+1,"SA1_MAINCODE_2016"]==-1) {
       # failed to find a suitable SA1/mode for this activity, so will just discard this person
@@ -165,7 +165,7 @@ calculatePlanSubset <- function(outdir,planGroup,plans) {
     if(i==nrow(pp) || pp[i,]$AgentId != pp[i+1,]$AgentId) {
       processed<-processed+1
     }
-    
+
     # # if SA1_MAINCODE_2016_{i} is not null
     # if(pp[i,"SA1_MAINCODE_2016"]!=-1) {
     #   wplans<-rbind(wplans, pp[i,])
@@ -245,7 +245,7 @@ close(gz1)
 # set.seed(20200406) # for when we want to have the same LocationType each time
 plans<-origplans[,c("PlanId","Activity","StartBin","EndBin")] %>%
   # Remove all plans that are not matched
-  filter(PlanId %in% matches$PlanId) %>% 
+  filter(PlanId %in% matches$PlanId) %>%
   # Assign matched PersonId (very fast since we assume row number equals Id number)
   mutate(AgentId = matches[as.numeric(PlanId),]$AgentId) %>%
   mutate(AgentId=as.factor(AgentId))
@@ -301,13 +301,13 @@ results <- foreach(planGroup=planGroups,
                    .verbose=FALSE,
                    .packages=c("doParallel", "sf","dplyr","scales","data.table"),
                    # export functions and dataframes,variables,etc
-                   .export = c("calcDistance", "calculateProbabilities", "chooseMode", 
-                               "findLocationKnownMode", "getReturnTripLength", 
-                               "SA1_attributed", "SA1_attributed_dt", 
+                   .export = c("calcDistance", "calculateProbabilities", "chooseMode",
+                               "findLocationKnownMode", "getReturnTripLength",
+                               "SA1_attributed", "SA1_attributed_dt",
                                "distanceMatrix", "distanceMatrixIndex", "distanceMatrixIndex_dt",
                                "getValidRegions", "readDistanceDistributions", "expectedDistances",
                                "readDestinationDistributions", "expectedDestinations_dt")
-) %dopar% 
+) %dopar%
   calculatePlanSubset(outdir,planGroup,plans)
 end_time = Sys.time()
 end_time - start_time

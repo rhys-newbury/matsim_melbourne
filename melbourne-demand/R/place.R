@@ -1,13 +1,13 @@
 assignLocationsToActivities <- function(plancsv, outcsv, writeInterval) {
 
   options(scipen=999) # disable scientific notation for more readible filenames with small sample sizes
-  
+
   # Read in the plans
   gz1<-gzfile(plancsv, 'rt')
   echo(paste0('Loading VISTA-like plans from ', plancsv, '\n'))
   plans<-read.csv(gz1, header=T, stringsAsFactors=F, strip.white=T)
   close(gz1)
-  
+
   echo('Assigning coordinates to activities in SA1s (can take a while)\n')
   pp<-plans
   pp$x<-0; pp$y<-0
@@ -20,7 +20,7 @@ assignLocationsToActivities <- function(plancsv, outcsv, writeInterval) {
     i<-i+1
     newPerson<-i==1 || pp[i,]$AgentId != pp[i-1,]$AgentId
     if(newPerson) {
-      homexy<-NULL 
+      homexy<-NULL
     }
     if(is.null(homexy) && pp[i,]$LocationType=="home") {
       homexy <- getAddressCoordinates(pp[i,]$SA1_MAINCODE_2016, pp[i,]$LocationType)

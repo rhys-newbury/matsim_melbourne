@@ -6,7 +6,7 @@ Due to its size this data is stored outside this Git repository.
 
 1. To download the data go to [this OSF location](https://osf.io/j56ux/),  and download it [like this](./download.PNG).
 
-2. Once downloaded, extract the archive into this directory and unzip the `<file>.zip` files into subdirectories named `<files.zip>.dir`. 
+2. Once downloaded, extract the archive into this directory and unzip the `<file>.zip` files into subdirectories named `<files.zip>.dir`.
 
 When you are all done, the current directory should contain the following new files and sub-directories.
 ```

@@ -6,7 +6,6 @@ Here we specify all features, then run_models can be called with a reduced set. 
 """
 
 import os
-from enum import IntEnum
 
 import numpy as np
 import pandas as pd
@@ -130,7 +129,6 @@ use_linegraph = True
 
 # Flag to use allowed modes or not
 use_allowed_modes = False
-
 
 
 # Read all network data into a dictionary of GeoDataFrames

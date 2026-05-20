@@ -6,15 +6,15 @@ assignTimesToActivities <- function(plancsv, binSizeInMins, outdir, outcsv, writ
   # outcsv <- '../output/7.time/plan.csv'
   # writeInterval <- 500
   # rseed <- 12345
-  
+
   options(scipen=999) # disable scientific notation for more readible filenames with small sample sizes
-  
+
   suppressPackageStartupMessages(library(stringr))
   suppressPackageStartupMessages(library(dplyr))
   suppressPackageStartupMessages(library(tidyr))
   suppressPackageStartupMessages(library(doParallel))
   suppressPackageStartupMessages(library(doRNG))
-  
+
   # Converts vector of secs to HH:MM:SS format
   toHHMMSS <- function(v) {
     if(is.null(v) || is.na(v) || !is.numeric(v)) return("??:??:??")
@@ -32,7 +32,7 @@ assignTimesToActivities <- function(plancsv, binSizeInMins, outdir, outcsv, writ
     zz <- as.vector(t(z %>% unite("zz", c("hh", "mm", "ss"), sep="")))
     return(zz)
   }
-  
+
   # Function courtesy https://privefl.github.io/blog/a-guide-to-parallelism-in-r/
   getParallelBlocks <- function (m, block.size, nb = ceiling(m/block.size)) {
     if (nb > m) {
@@ -44,7 +44,7 @@ assignTimesToActivities <- function(plancsv, binSizeInMins, outdir, outcsv, writ
     size <- c(upper[1], diff(upper))
     cbind(lower, upper, size)
   }
-    
+
   processBlocks <- function(plans, blocks, outcsv, writeInterval, i) {
     # previous method didn't account for deleted plans
     planIds<-unique(plans$PlanId)
@@ -57,16 +57,16 @@ assignTimesToActivities <- function(plancsv, binSizeInMins, outdir, outcsv, writ
     pp$act_start_hhmmss<-""; pp$act_end_hhmmss<-""
     wplans<-pp[FALSE,]
     write.table(wplans, file=outfile, append=FALSE, row.names=FALSE, sep = ',')
-    
+
     times<-data.frame(PlanId=c(rbind(pp$PlanId,pp$PlanId)), Secs=60*(binSizeInMins*c(rbind(pp$StartBin,pp$EndBin))-binSizeInMins))
     ids<-unique(pp$PlanId)
-    
+
     processed<-0
     for (id in ids) {
       secs <- times[times$PlanId==id,]$Secs # get the start/end times aligned to bin starts
       offsets <- sample(1:60*binSizeInMins, length(secs)) # generate unique offsets of 30mins length max
       secs<-secs + offsets
-      secs <- sort(secs) 
+      secs <- sort(secs)
       secs <- sapply(secs, toHHMMSS)
       # secs <- toHHMMSS(secs)
       odd <-1:length(secs)%%2 != 0
@@ -85,22 +85,22 @@ assignTimesToActivities <- function(plancsv, binSizeInMins, outdir, outcsv, writ
       }
     }
   }
-  
+
   dir.create(outdir, showWarnings = FALSE, recursive=TRUE)
-  
+
   # Read in the plans
   gz1<-gzfile(plancsv, 'rt')
   echo(paste0('Loading VISTA-like plans from ', plancsv, '\n'))
   plans<-read.csv(gz1, header=T, stringsAsFactors=F, strip.white=T)
   close(gz1)
-  
+
   # use all but one cores
   nrecords <- max(plans$PlanId,na.rm=T)
   ncores <- max(1,detectCores()-1)
   if(nrecords<=1000) ncores <- 1
   blockSize <- ceiling(nrecords/ncores)
   blocks <- getParallelBlocks(nrecords, blockSize)
-  
+
   echo(paste0('Assigning start/end times to activities using ', ncores, ' cores (can take a while)\n'))
 
   cl <- makeCluster(ncores)
@@ -118,14 +118,14 @@ assignTimesToActivities <- function(plancsv, binSizeInMins, outdir, outcsv, writ
   etime <- Sys.time()
   echo(paste0('Finished parallel processing in ', round(etime - stime,1), 's\n'))
   stopCluster(cl)
-  
+
   # files<-list.files(outdir,pattern="plan.csv.[[:digit:]]{1}",full.names=T)
   filesDF <- data.frame(
     location=list.files(outdir,pattern="plan.csv.[[:digit:]]{1}",full.names=T),
     order=list.files(outdir,pattern="plan.csv.[[:digit:]]{1}",full.names=F)%>%gsub("plan.csv.", "",.)%>%as.numeric(),
     stringsAsFactors=FALSE
   ) %>% arrange(order)
-  
+
   combined<-lapply(filesDF$location,read.csv,header=T) %>%
     bind_rows()
   colnames(combined)<-c("PlanId","Activity","StartBin","EndBin","AgentId",
@@ -133,5 +133,5 @@ assignTimesToActivities <- function(plancsv, binSizeInMins, outdir, outcsv, writ
                              "Distance","x","y","act_start_hhmmss","act_end_hhmmss")
   write.table(combined, file=outcsv, append=FALSE, row.names=FALSE, sep = ',')
   echo(paste0('Wrote ',length(unique(combined$PlanId)),' plans to ', outcsv , '\n'))
-  
+
 }

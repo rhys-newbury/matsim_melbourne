@@ -9,7 +9,7 @@ test_that("VISTA 2012-18 trips pre-processing works", {
   capture_output(
     demand_setup_groups(
       getGroupIds('../data/vistaCohorts.csv.gz'),
-      outdir, 
+      outdir,
       '../../expected/1.setup/vista_2012_18_extracted_trips_weekday_',
       'vista_2012_18_extracted_activities_weekday_',
       'vista_2012_18_extracted_activities_weekday_time_bins_',
@@ -23,7 +23,7 @@ test_that("VISTA 2012-18 trips pre-processing works", {
     'vista_2012_18_extracted_activities_weekday_time_bins_',
     'vista_2012_18_extracted_activities_weekday_end_dist_for_start_bins_'
   )
-  
+
   groups<-getGroupIds('../data/vistaCohorts.csv.gz')
   for (gid in groups) {
     for (prefix in files_prefix) {
@@ -33,4 +33,3 @@ test_that("VISTA 2012-18 trips pre-processing works", {
     }
   }
 })
-  

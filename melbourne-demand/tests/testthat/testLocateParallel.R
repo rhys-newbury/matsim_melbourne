@@ -7,7 +7,7 @@ library(tools) # for md5sum
 source("../../R/locateParallel.R")
 
 test_that("Assigning SA1s to activities works", {
-  
+
   # skip("FIXME: skipping because the test run produces errors")
   rseed<-12345
   set.seed(rseed)
@@ -18,7 +18,7 @@ test_that("Assigning SA1s to activities works", {
   outcsv<-'./tests/actual/5.locate/plan.csv'
   dir.create(outdir, showWarnings = FALSE, recursive=TRUE)
   outputcrs <- 7899
-  # locateParallel uses doParallel which must be run from the project root 
+  # locateParallel uses doParallel which must be run from the project root
   # to ensure packrat libraries are source correctly by the workers.
   # See https://stackoverflow.com/a/36901524.
   wd<-getwd()
@@ -27,11 +27,11 @@ test_that("Assigning SA1s to activities works", {
   capture_output(
     locatePlans(censuscsv, vistacsv, matchcsv, outdir, outcsv, rseed)
   )
-  setwd(wd) 
+  setwd(wd)
   capture_output(
     planToSpatial(read.csv("../actual/5.locate/plan.csv"),'../actual/5.locate/plan.sqlite',outputcrs)
   )
-  
+
   files<-c(
     'plan.csv',
     'persons.discarded.csv'
@@ -42,4 +42,3 @@ test_that("Assigning SA1s to activities works", {
   }
   expect_true(file.exists('../actual/5.locate/plan.sqlite'))
 })
-  

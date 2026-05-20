@@ -1,7 +1,7 @@
 assignActivityAreasAndTravelModes <-function(censuscsv, vistacsv, matchcsv, outdir, outcsv, writeInterval) {
 
   options(scipen=999) # disable scientific notation for more readable filenames with small sample sizes
-  
+
   suppressPackageStartupMessages(library(dplyr))
   suppressPackageStartupMessages(library(stringi))
   suppressPackageStartupMessages(library(doParallel))
@@ -35,20 +35,20 @@ assignActivityAreasAndTravelModes <-function(censuscsv, vistacsv, matchcsv, outd
     tc<-as.vector(sapply(tc, function(x) replace(x, x=="Other", sample(c("work","education","commercial","park"), 1))))
     return(tc)
   }
-  
+
   # Read in the persons
   gz1<-gzfile(censuscsv, 'rt')
   echo(paste0('Loading ABS census-like persons from ', censuscsv, '\n'))
   persons<-read.csv(gz1, header=T, stringsAsFactors=F, strip.white=T)
   close(gz1)
 
-  
+
   # Read in the plans
   gz1<-gzfile(vistacsv, 'rt')
   echo(paste0('Loading VISTA-like plans from ', vistacsv, '\n'))
   origplans<-read.csv(gz1, header=T, stringsAsFactors=F, strip.white=T)
   close(gz1)
-  
+
   # Read in the matches
   gz1<-gzfile(matchcsv, 'rt')
   echo(paste0('Loading matched plans to persons from ', matchcsv, '\n'))
@@ -58,7 +58,7 @@ assignActivityAreasAndTravelModes <-function(censuscsv, vistacsv, matchcsv, outd
   # set.seed(20200406) # for when we want to have the same LocationType each time
   plans<- origplans %>%
     # Remove all plans that are not matched
-    filter(PlanId %in% matches$PlanId) %>% 
+    filter(PlanId %in% matches$PlanId) %>%
     # Assign matched PersonId (very fast since we assume row number equals Id number)
     mutate(AgentId = matches[as.numeric(PlanId),]$AgentId) %>%
     # Tag home SA1 with PersonId
@@ -74,7 +74,7 @@ assignActivityAreasAndTravelModes <-function(censuscsv, vistacsv, matchcsv, outd
     apply(plans[plans$SA1_MAINCODE_2016!="",], 1, function(x) {
     persons[persons$AgentId==x["AgentId"],]$SA1_MAINCODE_2016
   })
-  
+
   plans<-plans %>%
     mutate(SA1_MAINCODE_2016=as.numeric(SA1_MAINCODE_2016))
 
@@ -95,13 +95,13 @@ assignActivityAreasAndTravelModes <-function(censuscsv, vistacsv, matchcsv, outd
   while(i<nrow(pp)) {
     i<-i+1
     # cat(paste0(i,"\n"))
-    startOfDay <- i==1 || (pp[i,]$PlanId != pp[i-1,]$PlanId && 
+    startOfDay <- i==1 || (pp[i,]$PlanId != pp[i-1,]$PlanId &&
                              pp[i,]$LocationType == "home")
     endOfDay <- i==nrow(pp) || (pp[i,]$AgentId != pp[i+1,]$AgentId)
-    
+
     if(startOfDay) {
       homeSA1<-pp[i,]$SA1_MAINCODE_2016 # used for calculating return probabilities
-      
+
       # nothing to do since home SA1s are already assigned; just save and continue
       wplans<-rbind(wplans, pp[i,])
     } else {
@@ -116,11 +116,11 @@ assignActivityAreasAndTravelModes <-function(censuscsv, vistacsv, matchcsv, outd
       allowedSA1<-returnTripLength
       allowedSA1[allowedSA1>nextHome-i] <- NA
       allowedSA1[!is.na(allowedSA1)] <- 1
-      
-      
+
+
       modeAndSa1<-findLocationKnownMode(as.numeric(pp[i-1,]$SA1_MAINCODE_2016), pp[i,]$LocationType, mode, allowedSA1)
       if(pp[i,]$LocationType=="home") modeAndSa1<-c(mode,homeSA1)
-      
+
       if(!is.null(modeAndSa1)) {
         # assign the mode and SA1
         pp[i,]$ArrivingMode<-modeAndSa1[1]
@@ -165,12 +165,12 @@ assignActivityAreasAndTravelModes <-function(censuscsv, vistacsv, matchcsv, outd
   cat('\n')
   echo(paste0('Wrote ',(processed-ndiscarded),' plans to ', outcsv , '\n'))
   echo(paste0('Wrote ',ndiscarded,' discarded persons to ', doutfile , '\n'))
-  
+
 }
 
 calculatePlanSubset <- function(planGroup,plans,outcsv,doutfile) {
   setDTthreads(1) # only one thread for data.table since we'll be operating in parallel
-  
+
   discarded<-persons[FALSE,]
   wplans<-NULL
   pp<-plans%>%filter(ceiling(PlanId/100)==planGroup)
@@ -182,13 +182,13 @@ calculatePlanSubset <- function(planGroup,plans,outcsv,doutfile) {
   # set.seed(20200406)
   while(i<nrow(pp)) {
     i<-i+1
-    startOfDay <- i==1 || (pp[i,]$PlanId != pp[i-1,]$PlanId && 
+    startOfDay <- i==1 || (pp[i,]$PlanId != pp[i-1,]$PlanId &&
                              pp[i,]$LocationType == "home")
     endOfDay <- i==nrow(pp) || (pp[i,]$AgentId != pp[i+1,]$AgentId)
-    
+
     if(startOfDay) {
       homeSA1<-pp[i,]$SA1_MAINCODE_2016 # used for calculating return probabilities
-      
+
       # nothing to do since home SA1s are already assigned; just save and continue
       wplans<-rbind(wplans, pp[i,])
     } else {
@@ -203,11 +203,11 @@ calculatePlanSubset <- function(planGroup,plans,outcsv,doutfile) {
       allowedSA1<-returnTripLength
       allowedSA1[allowedSA1>nextHome-i] <- NA
       allowedSA1[!is.na(allowedSA1)] <- 1
-      
-      
+
+
       modeAndSa1<-findLocationKnownMode(as.numeric(pp[i-1,]$SA1_MAINCODE_2016), pp[i,]$LocationType, mode, allowedSA1)
       if(pp[i,]$LocationType=="home") modeAndSa1<-c(mode,homeSA1)
-      
+
       if(!is.null(modeAndSa1)) {
         # assign the mode and SA1
         pp[i,]$ArrivingMode<-modeAndSa1[1]
@@ -238,5 +238,3 @@ calculatePlanSubset <- function(planGroup,plans,outcsv,doutfile) {
   write.table(discarded, file=doutfile, append=TRUE, row.names=FALSE, col.names=FALSE, sep = ',')
   return(data.frame(plan_group=planGroup,plans=processed,discarded=nrow(discarded)))
 }
-
-

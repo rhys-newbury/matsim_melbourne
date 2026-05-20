@@ -36,4 +36,3 @@ test_that("VISTA 2012-18 groupings work", {
     expect_true(md5sum(paste0('../actual/1.setup/', file)) == md5sum(paste0('../expected/1.setup/', file)))
   }
 })
-  

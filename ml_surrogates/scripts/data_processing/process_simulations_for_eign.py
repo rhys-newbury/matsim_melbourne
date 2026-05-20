@@ -17,7 +17,10 @@ import torch
 from torch_geometric.data import Data
 
 
-from ml_surrogates.data_preprocessing.help_functions import highway_mapping, get_link_geometries
+from ml_surrogates.data_preprocessing.help_functions import (
+    highway_mapping,
+    get_link_geometries,
+)
 from process_simulations_for_gnn import compute_result_dic
 from ml_surrogates.paths import get_root
 

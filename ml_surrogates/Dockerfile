@@ -21,11 +21,8 @@ RUN groupadd --gid 1000 taco \
 
 USER 1000
 
-WORKDIR /app  
+WORKDIR /app
 
 COPY --chown=taco: . .
 
 RUN pip install -e .
-
-
-  

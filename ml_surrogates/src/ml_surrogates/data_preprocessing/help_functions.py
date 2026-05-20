@@ -6,6 +6,7 @@ import torch
 from ml_surrogates.paths import get_root
 from numpy.typing import NDArray
 from enum import IntEnum
+
 districts_path = get_root() / "data" / "visualisation" / "districts_paris.geojson"
 districts = gpd.read_file(districts_path)
 
@@ -33,6 +34,7 @@ highway_mapping = {
     "pt": -1,
 }
 
+
 class EdgeFeatures(IntEnum):
     VOL_BASE_CASE = 0
     CAPACITY_BASE_CASE = 1
@@ -46,7 +48,6 @@ class EdgeFeatures(IntEnum):
     ALLOWED_MODE_TRAIN = 9
     ALLOWED_MODE_RAIL = 10
     ALLOWED_MODE_SUBWAY = 11
-
 
 
 def create_policy_key(folder_name: Path):

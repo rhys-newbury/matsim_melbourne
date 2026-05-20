@@ -1,18 +1,18 @@
 # Function to pre-process some data; need only be run once
-make_groups<-function(vista18PersonsCsv, 
+make_groups<-function(vista18PersonsCsv,
                       vista18TripsCsv,
-                      filterCsv, 
+                      filterCsv,
                       setupDir,
-                      out_weekday_persons_csv_gz, 
+                      out_weekday_persons_csv_gz,
                       out_weekday_groups_csv_prefix,
                       out_weekday_trips_csv_prefix,
                       out_weekend_persons_csv_gz,
                       out_weekend_groups_csv_prefix, # not implemented yet
                       out_weekend_trips_csv_prefix # not implemented yet
                       ) {
-  
+
   suppressPackageStartupMessages(library(dplyr))
-  
+
   # example parameter values
   #vista18PersonsCsv <- '../data/VISTA_12_18_CSV.zip.dir/P_VISTA1218_V1.csv'
   #filterCsv <- '../data/vistaCohorts.csv.gz'
@@ -21,25 +21,25 @@ make_groups<-function(vista18PersonsCsv,
   #out_weekend_persons_csv_gz <- '../output/1.setup/vista_2012_18_extracted_persons_weekend.csv.gz'
   #out_weekday_groups_csv_prefix <- 'vista_2012_18_extracted_group_weekday_'
   #out_weekday_trips_csv_prefix <- 'vista_2012_18_extracted_trips_weekday_'
-  
+
   extract_persons <- function(vista18PersonsCsv, out_weekday_persons_csv_gz, out_weekend_persons_csv_gz) {
-    
+
     gz1 <- gzfile(vista18PersonsCsv,'rt')
     data<-read.csv(gz1,header = T,sep=',',stringsAsFactors = F,strip.white = T)
     close(gz1)
-    
+
     datacols<-c("PERSID",
                 "AGE",
                 "SEX",
                 "WDPERSWGT",
                 "WEPERSWGT")
-    
+
     orig<-data[,datacols]
-    
+
     # Split into weekday/weekend and set the weights (ie counts here) correctly
     week<-orig[,datacols]
     isWeekday<-!(is.na(week$WDPERSWGT) |  week$WDPERSWGT=='')
-    
+
     if(!is.null(out_weekday_persons_csv_gz)) {
       weekdays<-week[isWeekday,]; weekdays$Count<- weekdays$WDPERSWGT
       # Fix any rows where the weights are not defined
@@ -67,35 +67,35 @@ make_groups<-function(vista18PersonsCsv,
       echo(paste0('Wrote ',out_weekend_persons_csv_gz,'\n'))
     }
   }
-  
-  
+
+
   extract_groups <- function(weekday_persons_csv_gz, filterCsv, setupDir, out_weekday_groups_csv_prefix) {
     infile <- weekday_persons_csv_gz
     gz1 <- gzfile(infile,'rt')
     data<-read.csv(gz1,header = T,sep=',',stringsAsFactors = F,strip.white = T)
     close(gz1)
-    
+
     datacols<-c("PERSID",
                 "AGE",
                 "SEX",
                 "Count")
-    
+
     orig<-data[,datacols]
-    
+
     infile <- filterCsv
     gz1 <- gzfile(infile,'rt')
     data<-read.csv(gz1,header = T,sep=',',stringsAsFactors = F,strip.white = T)
     close(gz1)
-    
+
     datacols<-c("sex",
                 "min_age",
                 "max_age",
                 "cluster_id_5")
-    
+
     filters <- data[,datacols] %>%
       group_by(cluster_id_5,sex) %>%
-      summarise(age_start=min(min_age), age_end=max(max_age)) 
-    
+      summarise(age_start=min(min_age), age_end=max(max_age))
+
     groups <- unique(filters$cluster_id_5)
     # write csv header in new file first
     for (gid in groups) {
@@ -103,7 +103,7 @@ make_groups<-function(vista18PersonsCsv,
       echo(paste0('Creating ',outfile,'\n'))
       write.table(orig[0,], outfile, row.names=FALSE, quote=TRUE, sep=",")
     }
-    
+
     for (row in 1:nrow(filters)) {
       cohort <- orig %>%
         filter(AGE >= filters[row,]$age_start & AGE <= filters[row,]$age_end & SEX == filters[row,]$sex)
@@ -112,11 +112,11 @@ make_groups<-function(vista18PersonsCsv,
       write.table(cohort, outfile, row.names=FALSE, col.names=FALSE, quote=TRUE, sep=",", append=TRUE)
     }
   }
-  
-  extract_trips_groups<-function(vista18TripsCsv, 
-                                 groups, 
-                                 setupDir, 
-                                 weekday_groups_csv_prefix, 
+
+  extract_trips_groups<-function(vista18TripsCsv,
+                                 groups,
+                                 setupDir,
+                                 weekday_groups_csv_prefix,
                                  out_weekday_trips_csv_prefix
                                  ) {
     # example parameter values
@@ -125,20 +125,20 @@ make_groups<-function(vista18PersonsCsv,
     # groups<-getGroupIds('../data/vistaCohorts.csv.gz')
     # weekday_groups_csv_prefix <- 'vista_2012_18_extracted_group_weekday_'
     # out_weekday_trips_csv_prefix <- 'vista_2012_18_extracted_trips_weekday_'
-    
+
     gz1 <- gzfile(vista18TripsCsv,'rt')
     vista_data<-read.csv(gz1,header = T,sep=',',stringsAsFactors = F,strip.white = T)
     close(gz1)
-    
+
     datacols<-c("PERSID",
                 "ORIGPURP1",
                 "DESTPURP1",
                 "STARTIME","ARRTIME",
                 "WDTRIPWGT",
                 "WETRIPWGT")
-    
+
     orig<-vista_data[,datacols]
-    
+
     for (gid in groups) {
       infile<-paste0(setupDir,"/",weekday_groups_csv_prefix,gid,".csv")
       gz1 <- gzfile(infile,'rt')
@@ -149,14 +149,13 @@ make_groups<-function(vista18PersonsCsv,
       echo(paste0('Writing ',outfile,'\n'))
       write.table(dd, outfile, row.names=FALSE, col.names=TRUE, quote=TRUE, sep=",", append=FALSE)
     }
-    
+
   }
-  
+
   echo(paste0('Extracting VISTA persons from ',vista18PersonsCsv,'\n'))
   extract_persons(vista18PersonsCsv, out_weekday_persons_csv_gz, out_weekend_persons_csv_gz)
   echo(paste0('Extracting VISTA groups based on ',filterCsv,'\n'))
   extract_groups(out_weekday_persons_csv_gz, filterCsv, setupDir, out_weekday_groups_csv_prefix)
   echo(paste0('Extracting VISTA trips groups based on ',filterCsv,'\n'))
-  extract_trips_groups(vista18TripsCsv, getGroupIds(filterCsv), setupDir, out_weekday_groups_csv_prefix, out_weekday_trips_csv_prefix) 
+  extract_trips_groups(vista18TripsCsv, getGroupIds(filterCsv), setupDir, out_weekday_groups_csv_prefix, out_weekday_trips_csv_prefix)
 }
-

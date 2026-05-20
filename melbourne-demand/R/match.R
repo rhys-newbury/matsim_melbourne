@@ -4,16 +4,16 @@ matchPersons<-function(filters, censuscsv, outcsv_prefix) {
   # filters <- getGroups('../data/vistaCohorts.csv.gz')
   # censuscsv <- '../output/2.sample/sample.csv.gz'
   # outcsv_prefix <- '../output/3.match/match_'
-  
-  
+
+
   # Read in the persons
   gz1<-gzfile(censuscsv, 'rt')
   echo(paste0('Loading ABS census-like persons from ', censuscsv, '\n'))
   orig<-read.csv(gz1, header=T, stringsAsFactors=F, strip.white=T)
   close(gz1)
-  
+
   echo(paste0('Matching census-like persons to VISTA-like groups\n'))
-  
+
   groupIds <- unique(filters$cluster_id_5)
 
   # write csv header in new file first
@@ -22,7 +22,7 @@ matchPersons<-function(filters, censuscsv, outcsv_prefix) {
     echo(paste0('Creating ',outfile,'\n'))
     write.table(orig[0,], outfile, row.names=FALSE, quote=TRUE, sep=",")
   }
-  
+
   for (row in 1:nrow(filters)) {
     gender <- if(filters[row,]$sex=="M") "Male" else "Female"
     cohort <- orig %>%

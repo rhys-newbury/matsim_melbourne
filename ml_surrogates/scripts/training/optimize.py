@@ -90,12 +90,24 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--baseline-policy-value", type=float, default=0.0)
     p.add_argument("--num-roads", type=int, default=10)
 
-    p.add_argument("--model-output", choices=["change", "absolute_volume"], default="change",
-                   help="Whether model(data) predicts volume change or absolute volume.")
-    p.add_argument("--overload-threshold", type=float, default=1.0,
-                   help="A road is overloaded when predicted_volume / capacity > this value.")
-    p.add_argument("--sigmoid-sharpness", type=float, default=30.0,
-                   help="Higher values make the soft overload count closer to the hard count.")
+    p.add_argument(
+        "--model-output",
+        choices=["change", "absolute_volume"],
+        default="change",
+        help="Whether model(data) predicts volume change or absolute volume.",
+    )
+    p.add_argument(
+        "--overload-threshold",
+        type=float,
+        default=1.0,
+        help="A road is overloaded when predicted_volume / capacity > this value.",
+    )
+    p.add_argument(
+        "--sigmoid-sharpness",
+        type=float,
+        default=30.0,
+        help="Higher values make the soft overload count closer to the hard count.",
+    )
     p.add_argument("--capacity-eps", type=float, default=1e-6)
 
     p.add_argument("--steps", type=int, default=400)
@@ -113,7 +125,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--ff-dim", type=int, default=768)
     p.add_argument("--num-layers", type=int, default=3)
     p.add_argument("--use-pos", action=argparse.BooleanOptionalAction, default=True)
-    p.add_argument("--use-graph-conv", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument(
+        "--use-graph-conv", action=argparse.BooleanOptionalAction, default=True
+    )
     p.add_argument("--num-graph-conv-layers", type=int, default=2)
 
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -131,7 +145,9 @@ def load_model(args: argparse.Namespace, device: torch.device) -> torch.nn.Modul
         use_graph_conv=args.use_graph_conv,
         num_graph_conv_layers=args.num_graph_conv_layers,
     )
-    model_path = args.model_path or os.path.join(args.run_path, "trained_model", "model.pth")
+    model_path = args.model_path or os.path.join(
+        args.run_path, "trained_model", "model.pth"
+    )
     state = torch.load(model_path, map_location=device)
     model.load_state_dict(state)
     model.to(device).eval()
@@ -143,7 +159,9 @@ def load_model(args: argparse.Namespace, device: torch.device) -> torch.nn.Modul
 
 
 def load_graph(args: argparse.Namespace, device: torch.device):
-    data_path = args.data_path or os.path.join(args.run_path, "data_created_during_training", "test_dl.pt")
+    data_path = args.data_path or os.path.join(
+        args.run_path, "data_created_during_training", "test_dl.pt"
+    )
     dataset = torch.load(data_path, map_location="cpu")
     data = copy.deepcopy(dataset[args.data_index])
     return data.to(device)
@@ -151,20 +169,34 @@ def load_graph(args: argparse.Namespace, device: torch.device):
 
 def scaled_feature_value(scaler, feature_idx: int, raw_value: float) -> float:
     if hasattr(scaler, "mean_") and hasattr(scaler, "scale_"):
-        return float((raw_value - scaler.mean_[feature_idx]) / scaler.scale_[feature_idx])
+        return float(
+            (raw_value - scaler.mean_[feature_idx]) / scaler.scale_[feature_idx]
+        )
     dummy = np.zeros((1, getattr(scaler, "n_features_in_", feature_idx + 1)))
     dummy[0, feature_idx] = raw_value
     return float(scaler.transform(dummy)[0, feature_idx])
 
 
-def unscale_feature_tensor(x_scaled: torch.Tensor, scaler, feature_idx: int) -> torch.Tensor:
+def unscale_feature_tensor(
+    x_scaled: torch.Tensor, scaler, feature_idx: int
+) -> torch.Tensor:
     """Return one feature from data.x in raw units while preserving gradients where possible."""
     col = x_scaled[:, feature_idx]
     if hasattr(scaler, "mean_") and hasattr(scaler, "scale_"):
-        mean = torch.as_tensor(float(scaler.mean_[feature_idx]), device=x_scaled.device, dtype=x_scaled.dtype)
-        scale = torch.as_tensor(float(scaler.scale_[feature_idx]), device=x_scaled.device, dtype=x_scaled.dtype)
+        mean = torch.as_tensor(
+            float(scaler.mean_[feature_idx]),
+            device=x_scaled.device,
+            dtype=x_scaled.dtype,
+        )
+        scale = torch.as_tensor(
+            float(scaler.scale_[feature_idx]),
+            device=x_scaled.device,
+            dtype=x_scaled.dtype,
+        )
         return col * scale + mean
-    raise ValueError("Only StandardScaler-style scalers are supported for differentiable unscaling.")
+    raise ValueError(
+        "Only StandardScaler-style scalers are supported for differentiable unscaling."
+    )
 
 
 def build_candidate_indices(args: argparse.Namespace, data) -> torch.Tensor:
@@ -182,9 +214,13 @@ def build_candidate_indices(args: argparse.Namespace, data) -> torch.Tensor:
         if "road_idx" not in meta.columns:
             meta = meta.reset_index().rename(columns={"index": "road_idx"})
         if "highway" not in meta.columns:
-            raise ValueError("metadata-csv must contain a 'highway' column when using --candidate-highways.")
+            raise ValueError(
+                "metadata-csv must contain a 'highway' column when using --candidate-highways."
+            )
         keep = set(args.candidate_highways)
-        highway_candidates = meta.loc[meta["highway"].isin(keep), "road_idx"].to_numpy(dtype=np.int64)
+        highway_candidates = meta.loc[meta["highway"].isin(keep), "road_idx"].to_numpy(
+            dtype=np.int64
+        )
         candidates = np.intersect1d(candidates, highway_candidates)
 
     candidates = candidates[(candidates >= 0) & (candidates < n)]
@@ -209,7 +245,13 @@ def apply_policy_to_x(
     return x
 
 
-def predicted_volume(model: torch.nn.Module, data, base_x: torch.Tensor, scaler_x, args: argparse.Namespace) -> torch.Tensor:
+def predicted_volume(
+    model: torch.nn.Module,
+    data,
+    base_x: torch.Tensor,
+    scaler_x,
+    args: argparse.Namespace,
+) -> torch.Tensor:
     pred = model(data).view(-1)
     if args.model_output == "absolute_volume":
         return pred
@@ -225,7 +267,9 @@ def overload_metrics(
     args: argparse.Namespace,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     vol = predicted_volume(model, data, base_x, scaler_x, args)
-    cap = unscale_feature_tensor(base_x, scaler_x, args.capacity_feature_idx).clamp_min(args.capacity_eps)
+    cap = unscale_feature_tensor(base_x, scaler_x, args.capacity_feature_idx).clamp_min(
+        args.capacity_eps
+    )
     vc_ratio = vol / cap
     overload_margin = vc_ratio - args.overload_threshold
     soft_count = torch.sigmoid(args.sigmoid_sharpness * overload_margin).sum()
@@ -262,7 +306,12 @@ def optimize_one_pick(
         soft_mask.scatter_(0, available, probs)
 
         data.x = apply_policy_to_x(
-            base_x, policy_idx, policy_scaled, baseline_scaled, already_selected, soft_mask
+            base_x,
+            policy_idx,
+            policy_scaled,
+            baseline_scaled,
+            already_selected,
+            soft_mask,
         )
         soft_count, _, _ = overload_metrics(model, data, base_x, scaler_x, args)
         entropy = -(probs * probs.clamp_min(1e-12).log()).sum()
@@ -280,15 +329,26 @@ def optimize_one_pick(
 
     committed = already_selected.clone()
     committed[chosen_road] = 1.0
-    data.x = apply_policy_to_x(base_x, policy_idx, policy_scaled, baseline_scaled, committed)
+    data.x = apply_policy_to_x(
+        base_x, policy_idx, policy_scaled, baseline_scaled, committed
+    )
 
     with torch.no_grad():
-        soft_count, hard_count, vc_ratio = overload_metrics(model, data, base_x, scaler_x, args)
+        soft_count, hard_count, vc_ratio = overload_metrics(
+            model, data, base_x, scaler_x, args
+        )
         max_vc = float(vc_ratio.max().detach().cpu())
         mean_vc = float(vc_ratio.mean().detach().cpu())
         score = float(best_logits[chosen_local].detach().cpu())
 
-    return chosen_road, float(soft_count.detach().cpu()), int(hard_count.detach().cpu()), max_vc, mean_vc, score
+    return (
+        chosen_road,
+        float(soft_count.detach().cpu()),
+        int(hard_count.detach().cpu()),
+        max_vc,
+        mean_vc,
+        score,
+    )
 
 
 def plot_overloaded_over_time(results: list[PickResult], output_path: str) -> None:
@@ -319,8 +379,12 @@ def main() -> None:
     data = load_graph(args, device)
     base_x = data.x.detach().clone()
 
-    policy_scaled = scaled_feature_value(scaler_x, args.policy_feature_idx, args.policy_value)
-    baseline_scaled = scaled_feature_value(scaler_x, args.policy_feature_idx, args.baseline_policy_value)
+    policy_scaled = scaled_feature_value(
+        scaler_x, args.policy_feature_idx, args.policy_value
+    )
+    baseline_scaled = scaled_feature_value(
+        scaler_x, args.policy_feature_idx, args.baseline_policy_value
+    )
 
     candidates = build_candidate_indices(args, data)
     selected_mask = torch.zeros(data.x.size(0), dtype=torch.float32, device=device)
@@ -330,14 +394,23 @@ def main() -> None:
         base_x, args.policy_feature_idx, policy_scaled, baseline_scaled, selected_mask
     )
     with torch.no_grad():
-        _, baseline_hard, baseline_vc = overload_metrics(model, data, base_x, scaler_x, args)
+        _, baseline_hard, baseline_vc = overload_metrics(
+            model, data, base_x, scaler_x, args
+        )
     print(f"Baseline overloaded roads: {int(baseline_hard.detach().cpu())}")
     print(f"Baseline max v/c ratio: {float(baseline_vc.max().detach().cpu()):.4f}")
 
     results: list[PickResult] = []
     with torch.enable_grad():
         for k in range(args.num_roads):
-            road_idx, soft_count, hard_count, max_vc, mean_vc, score = optimize_one_pick(
+            (
+                road_idx,
+                soft_count,
+                hard_count,
+                max_vc,
+                mean_vc,
+                score,
+            ) = optimize_one_pick(
                 model=model,
                 data=data,
                 base_x=base_x,

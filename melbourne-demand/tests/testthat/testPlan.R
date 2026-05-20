@@ -42,19 +42,18 @@ test_that("VISTA-like plans generation works", {
     'analysis-activity-times-by-bin.pdf',
     'plan.csv'
   )
-  
+
   groups<-getGroupIds('../data/vistaCohorts.csv.gz')
   for (gid in groups) {
     for (file in files) {
       expect_true(file.exists(paste0('../actual/4.plan/',gid,'/',file)))
     }
   }
-  
+
   expect_true(file.exists('../actual/4.plan/plan.csv'))
   expect_true(md5sum('../actual/4.plan/plan.csv') == md5sum('../expected/4.plan/plan.csv'))
-  
+
   expect_true(file.exists('../actual/4.plan/plan2agent2group.csv'))
   expect_true(md5sum('../actual/4.plan/plan2agent2group.csv') == md5sum('../expected/4.plan/plan2agent2group.csv'))
-  
+
 })
-  

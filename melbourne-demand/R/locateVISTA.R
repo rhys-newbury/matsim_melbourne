@@ -13,7 +13,7 @@ suppressPackageStartupMessages(library(purrr)) # for nested dataframes
 
 analyseLocate <- function(outdir) {
   # outdir='../output/5.locate'
-  
+
   # Functions ---------------------------------------------------------------
   lognormal_fun <- function(df) {
     result<-data.frame(logmean=NA,logsd=NA,count=NA)
@@ -25,13 +25,13 @@ analyseLocate <- function(outdir) {
     }
     return(result)
   }
-  
+
   aggregateData <- function(df,binwidth,max_dist=Inf) {
     # binwidth=400
     df<-df %>%
       mutate(centroid_distance=ifelse(centroid_distance<1,1,centroid_distance))
     maxDist <- max(df$centroid_distance)
-    
+
     df_aggregated <- df %>%
       mutate(distance=findInterval(centroid_distance,seq(0,maxDist,binwidth))) %>%
       mutate(distance=distance*binwidth-(binwidth*0.5)) %>%
@@ -41,20 +41,20 @@ analyseLocate <- function(outdir) {
       dplyr::select(distance,proportion) %>%
       filter(distance<max_dist)
   }
-  
+
   makeLine <- function(binwidth,max_dist,logmean,logsd) {
     df<-data.frame(distance=seq(0,max_dist,binwidth*0.2)) %>%
       mutate(proportion=dlnorm(distance,meanlog=logmean,sdlog=logsd) * binwidth)
     return(df)
   }
-  
-  
+
+
   # Read data ---------------------------------------------------------------
   sa1 <- st_read("../data/absRegionsReprojected.sqlite",
                  layer="sa1_2016_aust") %>%
     st_drop_geometry() %>%
     dplyr::select(sa1_maincode_2016,sa3_code_2016)
-  
+
   vpTrips <- read.csv(paste0(outdir,"/plan.csv")) %>%
     dplyr::select(planid=PlanId,origin_sa1=SA1_MAINCODE_2016,ArrivingMode,LocationType,
                   centroid_distance=Distance) %>%
@@ -64,7 +64,7 @@ analyseLocate <- function(outdir) {
     filter(!is.na(transport_mode)) %>%
     dplyr::select(planid,transport_mode,origin_type=LocationType,destination_type,
                   centroid_distance,origin_sa1,destination_sa1)
-  
+
   vpTripsSA1 <- vpTrips %>%
     inner_join(sa1, by=c('origin_sa1'='sa1_maincode_2016')) %>%
     mutate(centroid_distance=ifelse(centroid_distance<1,1,centroid_distance)) %>%
@@ -72,9 +72,9 @@ analyseLocate <- function(outdir) {
     dplyr::select(planid,transport_mode,origin_type,destination_type,
                   centroid_distance,weight,sa1_maincode_2016=origin_sa1,
                   sa3_code_2016)
-  
-  
-  
+
+
+
   # Distance histograms -----------------------------------------------------
   histogramAttributes <- data.frame(
     transport_mode=c('walk', 'bike',  'pt', 'car'),
@@ -94,7 +94,7 @@ analyseLocate <- function(outdir) {
     mutate(type='vp')
   vistaDistanceHistograms <- readRDS("../data/vistaSummaries/distanceHistograms.rds") %>%
     mutate(distance=distance+binwidth*0.5-binwidth*0.2)
-  
+
   combinedAll <- bind_rows(vistaDistanceHistograms,
                            vpDistanceHistograms) %>%
     arrange(transport_mode,distance,type) %>%
@@ -106,11 +106,11 @@ analyseLocate <- function(outdir) {
                        labels=c("Expected","Actual")))
   combinedAllLines <- combinedAll %>%
     dplyr::select(transport_mode,type,binwidth,max_dist,logmean,logsd) %>%
-    distinct()%>%ungroup()%>%rowwise()%>% 
-    dplyr::mutate(test_var = list(makeLine(binwidth,max_dist,logmean,logsd))) %>% 
+    distinct()%>%ungroup()%>%rowwise()%>%
+    dplyr::mutate(test_var = list(makeLine(binwidth,max_dist,logmean,logsd))) %>%
     unnest(cols=test_var)
-  
-  
+
+
   ggplot(combinedAll,
          aes(x=distance,y=proportion)) +
     geom_col(aes(fill=type,width=binwidth*0.4)) +
@@ -133,9 +133,9 @@ analyseLocate <- function(outdir) {
       panel.grid.minor = element_blank()) +
     labs(x = "Distance traveled (m)", y="Proportion")
   ggsave(paste0(outdir,"/analysis-distance-histograms.pdf"),width=6,height=4)
-  
-  
-  
+
+
+
   # Distance distributions SA3 ----------------------------------------------
   vpDistanceDistributionsSA3 <- vpTripsSA1 %>%
     group_by(sa3_code_2016,transport_mode) %>%
@@ -145,7 +145,7 @@ analyseLocate <- function(outdir) {
     unnest(cols='model') %>%
     filter(!is.na(logmean))
   vistaDistanceDistributionsSA3 <- readRDS("../data/vistaSummaries/distanceDistributionsSA3.rds")
-  
+
   expectedVsActualSA3 <- inner_join(vpDistanceDistributionsSA3%>%
                                       rename(meanActual=logmean,sdActual=logsd,countActual=count),
                                     vistaDistanceDistributionsSA3%>%
@@ -159,14 +159,14 @@ analyseLocate <- function(outdir) {
     summarise(corr_mean=cor(meanExpected,meanActual),
               corr_sd=cor(sdExpected,sdActual))
   expectedVsActualSA3Cor
-  
+
   ggplot(expectedVsActualSA3, aes(x=meanExpected,y=meanActual)) +
     geom_abline(aes(slope = 1, intercept=0),size=0.2) +
     geom_point(aes(x=meanExpected,y=meanActual,color='#009B95'),size=1.5,alpha=0.4) +
     geom_point(aes(x=sdExpected,y=sdActual,color='#FF7100'),size=1.5,alpha=0.4) +
     scale_color_manual(values=c('#009B95', '#FF7100'),labels=c('log-mean','log-sd')) +
     facet_wrap(~transport_mode, scales="free", ncol=2) +
-    labs(x="Expected distance", y="Actual distance") + 
+    labs(x="Expected distance", y="Actual distance") +
     # ggtitle('Expected versus actual distances by SA3 region') +
     guides(colour = guide_legend(override.aes = list(alpha = 1,size=2))) +
     scale_x_continuous(expand=c(0,0),limits=c(0,10.5), breaks=seq(0,10,2))+
@@ -177,9 +177,9 @@ analyseLocate <- function(outdir) {
       legend.margin=margin(0,0,0,0),
       legend.box.margin=margin(-5,0,5,0))
   ggsave(paste0(outdir,"/analysis-expected-versus-actual-distances-SA3.pdf"),width=6,height=4)
-  
-  
-  
+
+
+
   # Destination probabilities -----------------------------------------------
   # vpEndLocations <- vpTripsSA1 %>%
   #   group_by(planid) %>%
@@ -204,7 +204,7 @@ analyseLocate <- function(outdir) {
     mutate(prob=weight/total) %>%
     dplyr::select(prob_actual=prob,location_type,sa3_code_2016)
   vistaDestinationProbabilitiesSA3 <- readRDS("../data/vistaSummaries/destinationProbabilitiesSA3.rds")
-  
+
   expectedVsActualProbabilities <-
     full_join(vistaDestinationProbabilitiesSA3,
               vpDestinationProbabilitiesSA3,
@@ -212,13 +212,13 @@ analyseLocate <- function(outdir) {
     dplyr::select(prob_expected,prob_actual,location_type,sa3_code_2016) %>%
     mutate(prob_expected=ifelse(is.na(prob_expected),0,prob_expected)) %>%
     mutate(prob_actual=ifelse(is.na(prob_actual),0,prob_actual))
-  
-  
+
+
   ggplot(expectedVsActualProbabilities, aes(x=prob_expected,y=prob_actual)) +
     geom_abline(aes(slope = 1, intercept=0),size=0.2) +
     geom_point(color='#009B95',size=1,alpha=0.5) +
     facet_wrap(~location_type, scales="free", ncol=2) +
-    labs(x="Expected probability", y="Actual probability") + 
+    labs(x="Expected probability", y="Actual probability") +
     # ggtitle('Expected versus actual destination likelihood by SA3 region') +
     guides(colour = guide_legend(override.aes = list(alpha = 1,size=2))) +
     scale_x_continuous(labels=scales::percent_format(accuracy=1)) +
@@ -233,9 +233,9 @@ analyseLocate <- function(outdir) {
       legend.margin=margin(0,0,0,0),
       legend.box.margin=margin(-5,0,5,0))
   ggsave(paste0(outdir,"/analysis-destination-attraction-sa3.pdf"), width=6, height=4)
-  
-  
-  
+
+
+
   # Mode choice probabilities -----------------------------------------------
   vpModeChoiceProbabilitiesSA3 <- vpTripsSA1 %>%
     group_by(sa3_code_2016) %>%
@@ -246,7 +246,7 @@ analyseLocate <- function(outdir) {
     mutate(prob=weight/total) %>%
     dplyr::select(prob_actual=prob,transport_mode,sa3_code_2016)
   vistaModeChoiceProbabilitiesSA3 <- readRDS("../data/vistaSummaries/modeChoiceProbabilitiesSA3.rds")
-  
+
   expectedVsActualModeSA3 <-
     full_join(vistaModeChoiceProbabilitiesSA3,
               vpModeChoiceProbabilitiesSA3,
@@ -257,12 +257,12 @@ analyseLocate <- function(outdir) {
     mutate(transport_mode=factor(transport_mode,
                                  levels=c("walk","bike","pt","car"),
                                  labels=c("Walking","Cycling","Public transport","Driving")))
-  
+
   ggplot(expectedVsActualModeSA3, aes(x=prob_expected,y=prob_actual)) +
     geom_point(color='#009B95',size=1,alpha=0.5) +
     geom_abline(aes(slope = 1, intercept=0),size=0.2) +
     facet_wrap(~transport_mode, scales="free", ncol=2) +
-    labs(x="Expected probability", y="Actual probability") + 
+    labs(x="Expected probability", y="Actual probability") +
     # ggtitle('Expected versus actual destination likelihood by SA3 region') +
     guides(colour = guide_legend(override.aes = list(alpha = 1,size=2))) +
     scale_x_continuous(labels=scales::percent_format(accuracy=1)) +

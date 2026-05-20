@@ -37,15 +37,15 @@ getGroups<-function(filterCsv) {
   gz1 <- gzfile(filterCsv,'rt')
   data<-read.csv(gz1,header = T,sep=',',stringsAsFactors = F,strip.white = T)
   close(gz1)
-  
+
   datacols<-c("sex",
               "min_age",
               "max_age",
               "cluster_id_5")
-  
+
   filters <- data[,datacols] %>%
     group_by(cluster_id_5,sex) %>%
-    summarise(age_start=min(min_age), age_end=max(max_age)) 
-  
+    summarise(age_start=min(min_age), age_end=max(max_age))
+
   return(filters)
 }

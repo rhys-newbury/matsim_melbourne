@@ -15,4 +15,3 @@ test_that("Converting to xml works", {
   expect_true(file.exists('../actual/8.xml/plan.xml'))
   expect_true(md5sum('../actual/8.xml/plan.xml') == md5sum('../expected/8.xml/plan.xml'))
 })
-  

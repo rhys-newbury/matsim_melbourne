@@ -3,7 +3,7 @@ library(tools) # for md5sum
 checksum <- function() {
   # For CI testing purposes, use test data if available and full data is missing
   test_data_dir <- "../tests/data"
-  
+
   # Check if we have test data but no full data
   if (!file.exists("../data/VISTA_12_18_CSV.zip.dir")) {
     # Use test data path if available
@@ -14,7 +14,7 @@ checksum <- function() {
     cat("No data files found. Please download data from OSF (https://osf.io/j56ux/)\n")
     return(FALSE)
   }
-  
+
   # Note: The expected checksums are from the original OSF data files.
   # Some files may have been processed (e.g., BOM stripped) which changes checksums.
   # If any file is missing or not found, we fail.

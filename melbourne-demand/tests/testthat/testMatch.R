@@ -6,20 +6,20 @@ test_that("Matching census persons to VISTA groups works", {
   set.seed(12345)
   outdir<-'../actual/3.match'
   dir.create(outdir, showWarnings = FALSE, recursive=TRUE)
-  
+
   capture_output(
     matchPersons(
       getGroups('../data/vistaCohorts.csv.gz'),
       '../expected/2.sample/sample.csv.gz',
       '../actual/3.match/match_'
     )
-    
+
   )
 
   files_prefix<-c(
     'match_'
   )
-  
+
   groups<-getGroupIds('../data/vistaCohorts.csv.gz')
   for (gid in groups) {
     for (prefix in files_prefix) {
@@ -29,4 +29,3 @@ test_that("Matching census persons to VISTA groups works", {
     }
   }
 })
-  

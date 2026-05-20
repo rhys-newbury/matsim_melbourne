@@ -49,7 +49,7 @@ persons <- vista_data_persons %>%
     age>=60 & age<=64 ~'60-64',
     age>=65           ~'65plus')) %>%
   dplyr::select(PERSID,age_group,sex)
-  
+
 vista_data_weekday <- vista_data %>%
   filter(!is.na(WDTRIPWGT) & WDTRIPWGT!='') %>%
   dplyr::select("PERSID","DESTPURP1","LINKMODE","WDTRIPWGT") %>%
@@ -108,7 +108,7 @@ percent_mode <- vista_data_cohorts %>%
   ungroup() %>%
   pivot_wider(names_from=transport_mode, values_from=percentage)
 
-vista_data_cohorts2 <- inner_join(percent_activity,percent_mode,by="id") 
+vista_data_cohorts2 <- inner_join(percent_activity,percent_mode,by="id")
 
 
 # the clustering functions work on labeled matrices
@@ -132,15 +132,15 @@ ggsave("gapStatistic.pdf",width=8,height=6)
 # # methods to assess
 # m <- c( "average", "single", "complete", "ward")
 # names(m) <- c( "average", "single", "complete", "ward")
-# 
+#
 # # function to compute coefficient
 # ac <- function(x) {
 #   agnes(cohorts, method = x)$ac
 # }
-# 
+#
 # map_dbl(m, ac)
-# average    single  complete      ward 
-# 0.9055169 0.8861145 0.9207356 0.9605694 
+# average    single  complete      ward
+# 0.9055169 0.8861145 0.9207356 0.9605694
 # ward is the best
 
 hc <- agnes(cohorts, method = "ward")
@@ -156,7 +156,7 @@ table(sub_grp5)
 table(sub_grp6)
 
 pdf("dendrogram.pdf",width=8,height=6) # The height of the plot in inches
-pltree(hc, cex = 0.6, hang = -1, main = "Dendrogram of agnes") 
+pltree(hc, cex = 0.6, hang = -1, main = "Dendrogram of agnes")
 rect.hclust(hc, k = 7, border = 2:5)
 dev.off()
 
@@ -182,4 +182,3 @@ write.csv(vistaCohorts, file=gzfile("../data/vistaCohorts.csv.gz"), row.names=FA
 # data.frame(cohort=vista_data_cohorts2$id,
 #            cluster_id_4=sub_grp4,
 #            cluster_id_7=sub_grp7)
-

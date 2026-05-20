@@ -3,17 +3,17 @@ writePlanAsMATSimXML <- function(plancsv, outxml, writeInterval) {
   # plancsv <- '../output/7.time/plan.csv'
   # outxml <- '../output/8.xml/plan.xml'
   # writeInterval <- 100 # write to file in blocks of this size
-  
+
   options(scipen=999) # disable scientific notation for more readible filenames with small sample sizes
-  
+
 
   # Read in the plans
   gz1<-gzfile(plancsv, 'rt')
   echo(paste0('Loading VISTA-like plans from ', plancsv, '\n'))
   plans<-read.csv(gz1, header=T, stringsAsFactors=F, strip.white=T)
   close(gz1)
-  
-  # Change bike=>bicycle as required by baseline MATSim Melbourne scenario 
+
+  # Change bike=>bicycle as required by baseline MATSim Melbourne scenario
   # uncomment  the line below if "bicycle" instead of "bike" is desired
   # plans<-mutate(plans,ArrivingMode=replace(ArrivingMode,ArrivingMode=="bike","bicycle"))
 
@@ -24,14 +24,14 @@ writePlanAsMATSimXML <- function(plancsv, outxml, writeInterval) {
     '<population>'
   )
   cat(str,file=outxml, sep="\n")
-  
+
   pp<-plans
   popnWriteBuffer<-""
   processed<-0
   i=0
   while(i<nrow(pp)) {
     i<-i+1
-    
+
     # if this row marks the start of a new person's plan
     if(i==1 || (pp[i,]$AgentId != pp[i-1,]$AgentId)) {
       # count the persons
@@ -51,13 +51,13 @@ writePlanAsMATSimXML <- function(plancsv, outxml, writeInterval) {
       str<-paste0(str, '  <plan selected="yes">\n')
     } else {
       # if not the first activity then also add a leg
-      str<-paste0(str, '    <leg mode="',pp[i,]$ArrivingMode,'"/>\n') 
+      str<-paste0(str, '    <leg mode="',pp[i,]$ArrivingMode,'"/>\n')
     }
-    
-    # add this row as an activity    
-    str<-paste0(str, '    <activity type="',pp[i,]$Activity,'" x="',pp[i,]$x,'" y="',pp[i,]$y,'" end_time="',pp[i,]$act_end_hhmmss,'"/>\n') 
-    
-    # if this row marks the end of a person's plan 
+
+    # add this row as an activity
+    str<-paste0(str, '    <activity type="',pp[i,]$Activity,'" x="',pp[i,]$x,'" y="',pp[i,]$y,'" end_time="',pp[i,]$act_end_hhmmss,'"/>\n')
+
+    # if this row marks the end of a person's plan
     if(i==nrow(pp) || pp[i,]$AgentId != pp[i+1,]$AgentId) {
       # close off the tags
       str<-paste0(str, '  </plan>\n')
@@ -72,7 +72,7 @@ writePlanAsMATSimXML <- function(plancsv, outxml, writeInterval) {
       # report progress
       printProgress(processed,'.')
     }
-    
+
   }
   cat('</population>',file=outxml, append=TRUE,sep="\n")
   cat('\n')

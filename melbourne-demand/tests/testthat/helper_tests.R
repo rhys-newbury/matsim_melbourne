@@ -12,4 +12,3 @@ destinationsFile <- "../expected/1.setup/destinationProbabilitiesSA3.rds"
 loadLocationsData(distanceMatrixFile, distanceMatrixIndexFile,
                   sa1AttributedFile, sa1CentroidsFile, addressesFile,
                   distancesFile, destinationsFile)
-

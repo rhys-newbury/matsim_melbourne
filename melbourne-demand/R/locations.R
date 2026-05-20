@@ -9,14 +9,14 @@ loadLocationsData <- function(distanceMatrixFile, distanceMatrixIndexFile,
   # you do lookups by column or row.
   echo(paste0("Reading ", distanceMatrixFile, "\n"))
   distanceMatrix <<- readRDS(file=distanceMatrixFile) # note '<<' to make it global
-  
+
   # Some SA1s ended up snapping their centroid to the same node in the road
   # network so we need to use an index.
   echo(paste0("Reading ", distanceMatrixIndexFile, "\n"))
   distanceMatrixIndex <<- readRDS(file=distanceMatrixIndexFile)
   distanceMatrixIndex_dt <<- data.table(distanceMatrixIndex) # note '<<' to make it global
   setkey(distanceMatrixIndex_dt, sa1_maincode_2016)
-  
+
   # Reading in the attributed SA1 regions. I'm removing the geometry since it
   # won't be used here. Joining with the distance matrix index so the regions are
   # in the correct order.
@@ -24,20 +24,20 @@ loadLocationsData <- function(distanceMatrixFile, distanceMatrixIndexFile,
   SA1_attributed <<- readRDS(file=sa1AttributedFile)
   SA1_attributed_dt <<- data.table(SA1_attributed)  # note '<<' to make it global
   setkey(SA1_attributed_dt,sa1_maincode_2016)
-  
+
   # Reading in the addresses. I'm removing the geometry and converting it to X,Y.
   # These coordinates are in EPSG:28355, which is a projected coordinate system.
   echo(paste0("Reading ", addressesFile, "\n"))
   addresses <<- readRDS(file=addressesFile)
   addresses_dt <<- data.table(addresses)  # note '<<' to make it global
   setkey(addresses_dt, sa1_maincode_2016)
-  
+
   # Need the x and y locations of the centroids
   echo(paste0("Reading ", sa1CentroidsFile, "\n"))
   sa1_centroids <<- readRDS(file=sa1CentroidsFile)
   sa1_centroids_dt <<- data.table(sa1_centroids)  # note '<<' to make it global
   setkey(sa1_centroids_dt, sa1_maincode_2016)
-  
+
   expectedDistances <<- readRDS(file=distancesFile)
   expectedDestinations <<- readRDS(file=destinationFile)
   expectedDestinations_dt <<- data.table(expectedDestinations)  # note '<<' to make it global
@@ -67,7 +67,7 @@ calculateProbabilities <- function(SA1_id,destination_category,mode,allowedSA1=N
     inner_join(distanceMatrixIndex, by=c("index"="index")) %>%
     arrange(sa1_maincode_2016) %>%
     pull(distance)
-  
+
   modeMean <- NULL
   # modeMean <- SA1_attributed[which(SA1_attributed$sa1_maincode_2016==as.numeric(SA1_id)),
   #                            which(colnames(SA1_attributed_dt)==paste0("meanlog_",mode))]
@@ -96,7 +96,7 @@ calculateProbabilities <- function(SA1_id,destination_category,mode,allowedSA1=N
     expected_prop <- expectedDistances$bike_prop
     actual_count <- distanceCounts$pt_count
   }
-  
+
   # calculating global distance distribution probabilities
   actual_prop=actual_count*0 # default to 0
   if(sum(actual_count,na.rm=T)>0) actual_prop=actual_count/sum(actual_count,na.rm=T)
@@ -107,9 +107,9 @@ calculateProbabilities <- function(SA1_id,destination_category,mode,allowedSA1=N
   expectedProbability <- rep(0,length(distances))
   attractionProbability <- SA1_attributed_dt[,get(destination_category)] %>%
     unlist() %>% as.vector()
-  
+
   attractionProbability<-attractionProbability/sum(attractionProbability,na.rm=T) # normalise
-  
+
   # calculating global destination attraction probabilities
   expected_prob_dest <- expectedDestinations_dt[location_type == destination_category, .(prob_expected)][[1]]
   actual_count_dest <- destinationCounts[,which(colnames(destinationCounts)==paste0(destination_category,"_count"))]
@@ -132,10 +132,10 @@ calculateProbabilities <- function(SA1_id,destination_category,mode,allowedSA1=N
   )[,expected_prob := expected_prob/countValid]
   globalAttraction <- expectedDestinationsSA1weighted$expected_prob
   if(sum(globalAttraction,na.rm=T)>0) globalAttraction<-globalAttraction/sum(globalAttraction,na.rm=T) # normalise
-  
+
   # alternative way to compute distance probabilities for SA1s clipped to a much smaller set
   # within 2 standard deviations of the mode mean - Dhi, 21/Feb/20
-  dd <- distances 
+  dd <- distances
   dd[dd<200] <- 200 # Distances less than 200m are set to 200. This is to account for intra-SA1 trips
   if(mode=="walk") dd[dd>5000] <- NA # Shouldn't ever walk more then 5km (i.e. ~ 1 hour)
   dd[dd<qlnorm(0.05,modeMean,modeSD) | dd>qlnorm(0.95,modeMean,modeSD)]<- NA # discard anything >2SDs either side
@@ -151,8 +151,8 @@ calculateProbabilities <- function(SA1_id,destination_category,mode,allowedSA1=N
     groupProb<-data.frame(interval=seq(0,max(dd,na.rm=T),500)+250) %>%
       mutate(group_prob=plnorm(interval+250,modeMean,modeSD)-plnorm(interval-250,modeMean,modeSD)) %>%
       inner_join(globalProb,by="interval")
-      
-    
+
+
     # There are a lot less short distances than longer distances, we need to take
     # this into account for the distributions to look right
     proportionDF <- data.frame(distance=dd,distance_prob=distProbability) %>%
@@ -171,7 +171,7 @@ calculateProbabilities <- function(SA1_id,destination_category,mode,allowedSA1=N
 
     distProbability<-distProportion/sum(distProportion,na.rm=T) # normalise
   }
-  
+
   # I've set distance probability to 4x more important than destination
   # attraction. This is arbitrary.
   # multiplier=1 #  changed this from 4 to 1 - Dhi, 2020/02/21
@@ -202,23 +202,23 @@ getValidRegions <- function(SA1_id,mode,stops) {
   # SA1_id=20607113907
   # mode="walk"
   # stops=1
-  
+
   index <- distanceMatrixIndex_dt[.(as.numeric(SA1_id)),2]%>%as.numeric()
-  
+
   distances <-data.frame(index=1:nrow(distanceMatrix),
                          distance=distanceMatrix[index,]) %>% # look down columns
     inner_join(distanceMatrixIndex, by=c("index"="index")) %>%
     arrange(sa1_maincode_2016) %>%
     pull(distance)
   distances[distances<1] <- 1 # don't want to divide by 0
-  
+
   filteredset<-SA1_attributed_dt %>% # get mean and sd for current mode
     dplyr::select(Mean=paste0("meanlog_",mode),SD=paste0("sdlog_",mode))
-  
+
   distance95 <- qlnorm(0.95,filteredset$Mean,filteredset$SD)
   numberJumpsBack <- ceiling(distances/distance95) #how many jumps to get back to home SA1
   # View(data.frame(distance=distances,distance95=distance95,numberJumpsBack=numberJumpsBack))
-  
+
   allowedSA1<-numberJumpsBack
   allowedSA1[allowedSA1>stops] <- NA
   allowedSA1[!is.na(allowedSA1)] <- 1
@@ -228,7 +228,7 @@ getValidRegions <- function(SA1_id,mode,stops) {
 getReturnTripLength <- function(SA1_id,mode) {
   # SA1_id=20604112202
   # mode="car"
-  
+
   index <- distanceMatrixIndex_dt[.(as.numeric(SA1_id))] %>%
     pull(index)
   distances <-data.frame(index=1:nrow(distanceMatrix),
@@ -237,10 +237,10 @@ getReturnTripLength <- function(SA1_id,mode) {
     arrange(sa1_maincode_2016) %>%
     pull(distance)
   distances[distances<1] <- 1 # don't want to divide by 0
-  
+
   filteredset<-SA1_attributed_dt %>% # get mean and sd for current mode
     dplyr::select(Mean=paste0("meanlog_",mode),SD=paste0("sdlog_",mode))
-  
+
   distance95 <- qlnorm(0.95,filteredset$Mean,filteredset$SD)
   numberJumpsBack <- ceiling(distances/distance95) #how many jumps to get back to home SA1
   # View(data.frame(distance=distances,distance95=distance95,numberJumpsBack=numberJumpsBack))
@@ -258,7 +258,7 @@ chooseMode <- function(SA1_id, primary_mode=NA, anchor_region=FALSE) {
   # a list of the four mode probabilities for this SA1
   modeProbability <- SA1_attributed_dt[.(SA1_id),walk_proportion:car_proportion] %>%
     unlist()
-  
+
   modeProbabilityDF <- data.table(mode=c("walk","bike","pt","car"),
                                   modeProbability,
                                   stringsAsFactors=FALSE)
@@ -282,12 +282,12 @@ chooseMode <- function(SA1_id, primary_mode=NA, anchor_region=FALSE) {
 chooseModeOld <- function(SA1_id,destination_category) {
   # SA1_id=20604112202
   # destination_category="commercial"
-  
+
   # a list of the four mode probabilities for this SA1
   modeProbability <- SA1_attributed_dt[.(as.numeric(SA1_id))] %>%
     dplyr::select(walk_proportion:car_proportion) %>%
     unlist()
-  
+
   modeProbabilityDF <- data.frame(mode=c("walk","bike","pt","car"),
                                   modeProbability,
                                   stringsAsFactors=FALSE)
@@ -329,7 +329,7 @@ getReturnProbability <- function(source_SA1,destination_SA1,mode) {
     filter(sa1_maincode_2016==source_SA1) %>%
     pull(distProb) # Note that we only use the distance probability here, not
                    # the combined probability.
-  # sourceProb only returns regions within 2sd of the mean, so if the 
+  # sourceProb only returns regions within 2sd of the mean, so if the
   # destination is too far away, we need to manually set the probability to zero
   if(length(sourceProb)==0) (sourceProb=0)
   sourceProb <- sourceProb*nrow(probabilityDF)
@@ -340,7 +340,7 @@ getReturnProbability <- function(source_SA1,destination_SA1,mode) {
   return(sourceProb)
 }
 
-# Assign coordinates to a location within a specified SA1 with a specified category 
+# Assign coordinates to a location within a specified SA1 with a specified category
 # getAddressCoordinates(20604112202,"commercial")
 # getAddressCoordinates(21005144422,"home")
 
@@ -355,7 +355,7 @@ getAddressCoordinates <- function(SA1_id,destination_category) {
   }
   address_id <- sample(1:nrow(potentialAddresses), size=1,
                     prob=potentialAddresses$count)
-  
+
   # finding X and Y for selected address, then converting to Named num
   return(potentialAddresses[address_id,4:5]%>%unlist())
 }
@@ -372,11 +372,11 @@ toSA3 <- function(id) as.integer(substr(id,1,5))
 
 # Takes a plan with completed SA1 locations and turns them into a series of
 # lines where the non-spatial data is for the destination.
-# Need to supply a plan and an output file location. I recommend using the 
+# Need to supply a plan and an output file location. I recommend using the
 # .sqlite extension instead of shapefiles.
 # planToSpatial(read.csv("output/5.locate/plan.csv"),'output/5.locate/plan.sqlite',output_crs=7899)
 planToSpatial <- function(pp,fileLocation,output_crs) {
-  
+
   ppp <- pp %>%
     mutate(SA1_MAINCODE_2016=as.numeric(SA1_MAINCODE_2016)) %>%
     # Need the previous SA1 region
@@ -396,7 +396,7 @@ planToSpatial <- function(pp,fileLocation,output_crs) {
 
 # Takes a plan with places and turns them into a series of
 # lines where the non-spatial data is for the destination.
-# Need to supply a plan and an output file location. I recommend using the 
+# Need to supply a plan and an output file location. I recommend using the
 # .sqlite extension instead of shapefiles.
 # placeToSpatial(read.csv("output/6.place/plan.csv"),'output/6.place/plan.sqlite',output_crs)
 placeToSpatial <- function(pp,fileLocation,output_crs) {
@@ -412,7 +412,7 @@ placeToSpatial <- function(pp,fileLocation,output_crs) {
     # filter(st_is_valid(.))
   # Write the spatial dataframe to file
   st_write(ppp,fileLocation,delete_layer=TRUE,layer="lines",quiet=TRUE)
-  
+
   ppp2 <- pp %>%
     # Ignore the first entries for a person as they won't have a valid previous location
     # turn the two SA1 centroids into line geometry
@@ -452,7 +452,7 @@ calculateExpected <- function(transport_mode) {
 
 createExpectedDistances <- function(vistaLocation,outdir) {
   # outdir='../output/1.setup';vistaLocation='../data/vistaSummaries/distanceHistograms.rds'
-  
+
 expDist<-readRDS(vistaLocation) %>%
   dplyr::select(mode=transport_mode,logmean,logsd) %>%
   distinct() %>%
@@ -483,7 +483,7 @@ expectedDistances <- data.frame(distance=seq(250,163250,500)) %>%
 readDistanceDistributions <- function(outdir) {
   # outdir<-'../output/5.locate'
   distCountDir<-paste0(outdir,"/distanceCounts")
-  
+
   distFiles<-list.files(distCountDir,pattern="*.rds",full.names=T)
   Sys.sleep(2)
   distanceCounts<-lapply(distFiles,readRDS) %>%
@@ -500,7 +500,7 @@ readDistanceDistributions <- function(outdir) {
 readDestinationDistributions <- function(outdir) {
   # outdir<-'../output/5.locate'
   distCountDir<-paste0(outdir,"/destinationCounts")
-  
+
   distFiles<-list.files(distCountDir,pattern="*.rds",full.names=T)
   Sys.sleep(2)
   destinationCounts<-lapply(distFiles,readRDS) %>%
@@ -515,7 +515,7 @@ readDestinationDistributions <- function(outdir) {
 }
 # EXAMPLES
 
-# A dataframe of suitable homes for each SA1 along with the total number of 
+# A dataframe of suitable homes for each SA1 along with the total number of
 # unique addresses.
 #suitableHomes <- addresses %>%
 #  filter(category=="home") %>%
