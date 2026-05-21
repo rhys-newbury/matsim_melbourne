@@ -2,14 +2,6 @@ version: '3.8'
 
 services:
   service:
-      volumes:
-        - ./:/app
-        - /tmp/.X11-unix:/tmp/.X11-unix
-        - ~/.Xauthority:/root/.Xauthority
-        - ~/.bash_history:/home/user/.bash_history
-        - ~/.gitconfig:/etc/gitconfig
-        - ~/.ssh:/home/user/.ssh
-
       network_mode: "host"
       build:
         dockerfile: Dockerfile

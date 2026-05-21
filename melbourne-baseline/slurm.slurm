@@ -10,6 +10,7 @@ set -euo pipefail
 mkdir -p logs
 
 apptainer exec \
-  --pwd=/app \
+  --bind "$PWD:/app" \
+  --pwd /app \
   docker.sif \
   bash scripts/run_baseline_scenario.sh
