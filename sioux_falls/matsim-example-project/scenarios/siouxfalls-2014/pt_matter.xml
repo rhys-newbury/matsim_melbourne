@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE config SYSTEM "https://www.matsim.org/files/dtd/config_v2.dtd">
+<config>
+  <module name="PublicTransitMapping">
+
+    <param name="inputNetworkFile" value="sioux-falls.xml"/>
+    <param name="inputScheduleFile" value="Siouxfalls_transitSchedule_unlinked.xml"/>
+
+    <param name="outputNetworkFile" value="sioux-falls-with-pt.xml.gz"/>
+    <param name="outputScheduleFile" value="Siouxfalls_transitSchedule_mapped_to_sioux_falls.xml.gz"/>
+
+    <param name="maxLinkCandidateDistance" value="1000.0"/>
+    <param name="nLinkThreshold" value="8"/>
+    <param name="modeSpecificRules" value="false"/>
+    <param name="modesToKeepOnCleanUp" value="car,bus"/>
+    <parameterset type="transportModeAssignment">
+      <param name="scheduleMode" value="bus"/>
+      <param name="networkModes" value="car,bus"/>
+    </parameterset>
+
+  </module>
+</config>

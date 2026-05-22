@@ -3,13 +3,16 @@ version: '3.8'
 services:
   service:
       volumes:
-        - ./:/app
+        - ./data:/app/data
+        - ./output:/app/output
+        - ./scripts:/app/scripts
+        - ./tests:/app/tests
+
         - /tmp/.X11-unix:/tmp/.X11-unix
         - ~/.Xauthority:/root/.Xauthority
         - ~/.bash_history:/home/user/.bash_history
         - ~/.gitconfig:/etc/gitconfig
         - ~/.ssh:/home/user/.ssh
-
       shm_size: "16gb"
       network_mode: "host"
       build:
@@ -22,13 +25,7 @@ services:
       privileged: true
       restart: unless-stopped
 
-      deploy:
-        resources:
-          reservations:
-            devices:
-              - driver: nvidia
-                count: 1
-                capabilities: [gpu]
       environment:
         - DISPLAY=:0
         - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
+        - NVIDIA_VISIBLE_DEVICES=void

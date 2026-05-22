@@ -1,0 +1,11 @@
+renv/library/
+renv/staging/
+renv/cache/
+renv/python/
+renv/local/
+renv/sandbox/
+.Rproj.user/
+.git/
+.Rhistory
+.RData
+.Ruserdata

@@ -20,4 +20,4 @@ if [[ ! -f scenario/v1/demand/output-Sep10-01pct/8.xml/plan.xml ]]; then
   exit 1
 fi
 
-java -jar "$jar_file" scenario/v1 config.xml true
+java -Xmx56g -jar "$jar_file" scenario/v1 config.xml true
