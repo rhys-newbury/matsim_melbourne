@@ -287,9 +287,26 @@ saveRDS(data.frame(sa3_code_2016=c(20601:20607,20701:20703,20801:20804,20901:209
         paste0(outdir,"/destinationCounts/0.rds"))
 
 number_cores <- max(1,floor(as.integer(detectCores())*0.8))
-cl <- makeCluster(number_cores)
+
+.libPaths(c("/opt/renv/library", .libPaths()))
+
+cl <- makeCluster(number_cores, type = "PSOCK")
 echo(paste0("About to start processing density in parallel, using ",number_cores," cores\n"))
 echo(paste0("Now processing the ",length(planGroups)," plan groups\n"))
+
+clusterEvalQ(cl, {
+  .libPaths(c("/opt/renv/library", .libPaths()))
+
+  library(foreach)
+  library(doParallel)
+  library(dplyr)
+  library(data.table)
+  library(sf)
+  library(scales)
+
+  NULL
+})
+
 
 registerDoParallel(cl)
 if (!is.null(rseed)) {

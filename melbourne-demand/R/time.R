@@ -102,8 +102,27 @@ assignTimesToActivities <- function(plancsv, binSizeInMins, outdir, outcsv, writ
   blocks <- getParallelBlocks(nrecords, blockSize)
 
   echo(paste0('Assigning start/end times to activities using ', ncores, ' cores (can take a while)\n'))
+  .libPaths(c("/opt/renv/library", .libPaths()))
 
-  cl <- makeCluster(ncores)
+  cl <- makeCluster(ncores, type = "PSOCK")
+
+
+  clusterEvalQ(cl, {
+    .libPaths(c("/opt/renv/library", .libPaths()))
+
+    library(foreach)
+    library(iterators)
+    library(doParallel)
+    library(dplyr)
+    library(data.table)
+    library(sf)
+    library(scales)
+
+    NULL
+  })
+
+
+
   registerDoParallel(cl)
   if (!is.null(rseed)) {
     registerDoRNG(seed = rseed)

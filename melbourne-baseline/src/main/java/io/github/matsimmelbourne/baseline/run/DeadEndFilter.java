@@ -11,13 +11,16 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Removes bicycle dead-ends from a MATSim network.
+ * Removes or repairs bicycle dead-ends from a MATSim network.
  *
  * Logic:
  *  - Filter only bicycle-enabled links
  *  - Find nodes with no bicycle in OR no bicycle out
- *  - If attached link is bicycle-only -> remove link
- *  - Otherwise remove bicycle from allowed modes
+ *  - If addReverseLinks == false:
+ *      - bicycle-only links are removed
+ *      - mixed-mode links lose bicycle mode
+ *  - If addReverseLinks == true:
+ *      - a reverse bicycle link is added instead
  *  - Repeat until stable
  */
 public class DeadEndFilter {
@@ -37,12 +40,23 @@ public class DeadEndFilter {
     ) {}
 
     /**
-     * Cleans bicycle dead ends.
+     * Existing behaviour: cleans bicycle dead ends by removing them.
      *
      * @param network MATSim network
      * @return list of actions taken
      */
     public static List<RemovalAction> clean(Network network) {
+        return clean(network, false);
+    }
+
+    /**
+     * Cleans or repairs bicycle dead ends.
+     *
+     * @param network MATSim network
+     * @param addReverseLinks if true, add reverse bicycle links instead of removing dead ends
+     * @return list of actions taken
+     */
+    public static List<RemovalAction> clean(Network network, boolean addReverseLinks) {
 
         List<RemovalAction> actions = new ArrayList<>();
 
@@ -64,6 +78,11 @@ public class DeadEndFilter {
                     .filter(n -> !bikeIn(n).isEmpty() || !bikeOut(n).isEmpty())
                     .count();
 
+            if (bikeNodes == 0) {
+                log.info("No bicycle nodes remaining");
+                break;
+            }
+
             log.info("Bicycle nodes: {}, dead-end nodes: {}, share: {}%",
                     bikeNodes, deadNodes.size(), 100.0 * deadNodes.size() / bikeNodes);
 
@@ -83,8 +102,19 @@ public class DeadEndFilter {
 
                     Set<String> oldModes = new HashSet<>(link.getAllowedModes());
 
-                    // bicycle-only link -> remove entire link
-                    if (oldModes.size() == 1 && oldModes.contains(MODE)) {
+                    if (!oldModes.contains(MODE)) {
+                        continue;
+                    }
+
+                    if (addReverseLinks) {
+
+                        boolean added = addReverseBikeLink(network, link, actions);
+
+                        if (added) {
+                            changed = true;
+                        }
+
+                    } else if (oldModes.size() == 1 && oldModes.contains(MODE)) {
 
                         RemovalAction action = new RemovalAction(
                                 link.getId(),
@@ -97,16 +127,14 @@ public class DeadEndFilter {
                         );
 
                         actions.add(action);
-
                         logAction(action);
 
                         network.removeLink(link.getId());
 
                         changed = true;
 
-                    } else if (oldModes.contains(MODE)) {
+                    } else {
 
-                        // mixed-mode link -> remove bicycle mode only
                         Set<String> newModes = new HashSet<>(oldModes);
                         newModes.remove(MODE);
 
@@ -121,7 +149,6 @@ public class DeadEndFilter {
                         );
 
                         actions.add(action);
-
                         logAction(action);
 
                         link.setAllowedModes(newModes);
@@ -131,16 +158,17 @@ public class DeadEndFilter {
                 }
             }
 
-            // remove isolated nodes
-            List<Id<Node>> emptyNodes = network.getNodes().values().stream()
-                    .filter(n -> n.getInLinks().isEmpty() && n.getOutLinks().isEmpty())
-                    .map(Node::getId)
-                    .collect(Collectors.toList());
+            if (!addReverseLinks) {
+                List<Id<Node>> emptyNodes = network.getNodes().values().stream()
+                        .filter(n -> n.getInLinks().isEmpty() && n.getOutLinks().isEmpty())
+                        .map(Node::getId)
+                        .collect(Collectors.toList());
 
-            emptyNodes.forEach(network::removeNode);
+                emptyNodes.forEach(network::removeNode);
 
-            if (!emptyNodes.isEmpty()) {
-                log.info("Removed {} isolated nodes", emptyNodes.size());
+                if (!emptyNodes.isEmpty()) {
+                    log.info("Removed {} isolated nodes", emptyNodes.size());
+                }
             }
 
             log.info("Finished iteration {} with {} actions", iteration, actions.size());
@@ -150,6 +178,54 @@ public class DeadEndFilter {
         log.info("Bicycle dead-end cleanup complete. Total actions: {}", actions.size());
 
         return actions;
+    }
+
+    /**
+     * Adds a reverse bicycle link from B -> A for a dead-end A -> B link.
+     */
+    private static boolean addReverseBikeLink(
+            Network network,
+            Link originalLink,
+            List<RemovalAction> actions
+    ) {
+
+        Id<Link> reverseId = Id.createLinkId(originalLink.getId() + "_reverse");
+
+        if (network.getLinks().containsKey(reverseId)) {
+            return false;
+        }
+
+        Node fromNode = originalLink.getToNode();
+        Node toNode = originalLink.getFromNode();
+
+        Link reverseLink = network.getFactory().createLink(
+                reverseId,
+                fromNode,
+                toNode
+        );
+
+        reverseLink.setAllowedModes(Set.of(MODE));
+        reverseLink.setLength(originalLink.getLength());
+        reverseLink.setFreespeed(originalLink.getFreespeed());
+        reverseLink.setCapacity(originalLink.getCapacity());
+        reverseLink.setNumberOfLanes(originalLink.getNumberOfLanes());
+
+        network.addLink(reverseLink);
+
+        RemovalAction action = new RemovalAction(
+                reverseLink.getId(),
+                reverseLink.getFromNode().getId(),
+                reverseLink.getToNode().getId(),
+                "ADDED_REVERSE_LINK",
+                Set.of(),
+                Set.of(MODE),
+                "bicycle dead-end repaired by adding reverse link"
+        );
+
+        actions.add(action);
+        logAction(action);
+
+        return true;
     }
 
     /**

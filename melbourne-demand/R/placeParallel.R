@@ -58,7 +58,26 @@ assignLocationsToActivities <- function(plancsv,outdir,rseed=NULL) {
   dir.create(paste0(outdir,'/plan'), showWarnings = FALSE, recursive=TRUE)
 
   number_cores <- max(1,floor(as.integer(detectCores())*0.8))
-  cl <- makeCluster(number_cores)
+
+  .libPaths(c("/opt/renv/library", .libPaths()))
+
+  cl <- makeCluster(number_cores, type = "PSOCK")
+
+  clusterEvalQ(cl, {
+  .libPaths(c("/opt/renv/library", .libPaths()))
+
+  library(foreach)
+  library(iterators)
+  library(doParallel)
+  library(dplyr)
+  library(data.table)
+  library(sf)
+  library(scales)
+
+  NULL
+  })
+
+
   echo(paste0("About to start assigning coordinates to activities in SA1s, using ",number_cores," cores\n"))
   echo(paste0("Now processing the ",length(planGroups)," plan groups(can take a while)\n"))
 

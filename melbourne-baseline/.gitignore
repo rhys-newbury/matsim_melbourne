@@ -4,5 +4,7 @@ output/
 .DS_Store
 LICENSE.txt
 THIRD-PARTY.txt
-scenario/
+scenario/v1/demand
+scenario/v1/network
+
 *.sif
