@@ -3,6 +3,20 @@ FROM ubuntu:24.04
 # Install system dependencies
 RUN apt update && apt install -y git openjdk-25-jdk maven
 
+RUN apt update && apt install -y python3-pip build-essential python3-dev && pip install --break-system-packages \
+    rich \
+    tqdm \
+    pandas \
+    numpy \
+    zstandard \
+    pydeck \
+    plotly \
+    holoviews \
+    datashader \
+    bokeh \
+    pyproj \
+    lxml
+
 RUN mkdir /app
 
 RUN chown -R 1000:1000 /app
@@ -20,6 +34,8 @@ COPY src src
 COPY scripts/bootstrap_baseline.sh /app/scripts/bootstrap_baseline.sh
 
 RUN bash /app/scripts/bootstrap_baseline.sh
+
+
 
 COPY . .
 
