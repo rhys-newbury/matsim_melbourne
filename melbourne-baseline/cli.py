@@ -27,6 +27,11 @@ from rich.table import Table
 import pandas as pd
 import pydeck as pdk
 from tqdm import tqdm
+from pyproj import Transformer
+from collections import Counter
+
+from scipy.spatial import KDTree
+import numpy as np
 
 
 from rich.text import Text
@@ -834,36 +839,39 @@ def cmd_mode_stats(agents: dict[str, Agent], mode: str) -> None:
     console.print()
 
 
+# ── network analysis ──────────────────────────────────────────────────────────
+
+MODES = ["car", "bicycle", "pt"]
+
 LAYER_COLORS = {
-    "car_regular": [52, 152, 219],
-    "car_deadend": [155, 89, 182],
-    "bicycle_regular": [46, 204, 113],
-    "bicycle_deadend": [241, 196, 15],
-    "pt_regular": [231, 76, 60],
-    "pt_deadend": [230, 126, 34],
+    "car":                  [52,  152, 219],
+    "bicycle":              [46,  204, 113],
+    "pt":                   [231,  76,  60],
+    "bicycle_disconnected": [255,  50,  50],
+    "pt_disconnected":      [255, 150,   0],
 }
 
-def compute_disconnected_links(network, mode):
+
+def compute_disconnected_links(network: NetworkData, mode: str) -> set[str]:
     """Return link_ids not in the largest strongly connected component for this mode."""
-    # build adjacency
     mode_links = [lk for lk in network.links if mode in lk.modes]
     if not mode_links:
         return set()
 
     nodes = set()
-    out_edges = defaultdict(list)
-    in_edges  = defaultdict(list)
+    out_edges: dict[str, list] = defaultdict(list)
+    in_edges:  dict[str, list] = defaultdict(list)
     for lk in mode_links:
         nodes.add(lk.from_id)
         nodes.add(lk.to_id)
         out_edges[lk.from_id].append(lk.to_id)
         in_edges[lk.to_id].append(lk.from_id)
 
-    # Kosaraju's algorithm
-    visited = set()
-    order   = []
+    # Kosaraju pass 1
+    visited: set[str] = set()
+    order:   list[str] = []
 
-    def dfs1(v):
+    def dfs1(v: str):
         stack = [(v, iter(out_edges[v]))]
         while stack:
             node, children = stack[-1]
@@ -881,11 +889,12 @@ def compute_disconnected_links(network, mode):
             visited.add(n)
             dfs1(n)
 
-    visited2  = set()
-    component = {}
-    comp_id   = 0
+    # Kosaraju pass 2
+    visited2:  set[str]       = set()
+    component: dict[str, int] = {}
+    comp_id = 0
 
-    def dfs2(v, cid):
+    def dfs2(v: str, cid: int):
         stack = [v]
         while stack:
             node = stack.pop()
@@ -901,107 +910,124 @@ def compute_disconnected_links(network, mode):
             dfs2(n, comp_id)
             comp_id += 1
 
-    # largest SCC
-    counts  = defaultdict(int)
+    counts: dict[int, int] = defaultdict(int)
     for cid in component.values():
         counts[cid] += 1
     main_cid = max(counts, key=counts.get)
 
     disconnected_nodes = {n for n, cid in component.items() if cid != main_cid}
-
     return {
         lk.link_id for lk in mode_links
         if lk.from_id in disconnected_nodes or lk.to_id in disconnected_nodes
     }
 
-def classify_link(lk):
-    mode = lk.primary_mode
 
-    # adjust this if your dead-end flag is named differently
-    is_deadend = getattr(lk, "deadend", False) or getattr(lk, "is_deadend", False)
+def find_sinks_and_sources(
+    network: NetworkData,
+    mode: str,
+) -> tuple[set[str], set[str]]:
+    """
+    Return (sink_node_ids, source_node_ids) for the given mode.
 
-    kind = "deadend" if is_deadend else "regular"
+    sink   = has incoming links but NO outgoing  → can arrive, can't leave
+    source = has outgoing links but NO incoming   → can leave, can't arrive
+    """
+    mode_links = [lk for lk in network.links if mode in lk.modes]
+    out_nodes = {lk.from_id for lk in mode_links}
+    in_nodes  = {lk.to_id   for lk in mode_links}
+    sinks   = in_nodes  - out_nodes
+    sources = out_nodes - in_nodes
+    return sinks, sources
 
-    if mode in {"car", "bicycle", "pt"}:
-        return f"{mode}_{kind}"
+def make_mode_bidirectional(network: NetworkData, mode: str) -> NetworkData:
+    """
+    For every link that allows `mode`, add the reverse direction if missing.
+    Keeps original links and appends synthetic reverse links.
+    """
+    existing = {
+        (lk.from_id, lk.to_id)
+        for lk in network.links
+        if mode in lk.modes
+    }
 
-    return None
-
-
-MODES = ["car", "bicycle", "pt"]
-
-LAYER_COLORS = {
-    "car_regular": [52, 152, 219],
-    "car_deadend": [0, 80, 180],
-    "bicycle_regular": [46, 204, 113],
-    "bicycle_deadend": [0, 130, 70],
-    "pt_regular": [231, 76, 60],
-    "pt_deadend": [150, 0, 0],
-}
-
-
-def compute_deadend_links(network, mode):
-    in_count = defaultdict(int)
-    out_count = defaultdict(int)
-
-    mode_links = []
+    new_links = list(network.links)
+    added = 0
 
     for lk in network.links:
         if mode not in lk.modes:
             continue
 
-        mode_links.append(lk)
-        out_count[lk.from_id] += 1
-        in_count[lk.to_id] += 1
+        reverse_key = (lk.to_id, lk.from_id)
+        if reverse_key in existing:
+            continue
 
-    dead_nodes = {
-        node_id
-        for node_id in set(in_count) | set(out_count)
-        if in_count[node_id] == 0 or out_count[node_id] == 0
-    }
+        reverse_id = f"{lk.link_id}__reverse_{mode}"
 
-    return {
-        lk.link_id
-        for lk in mode_links
-        if lk.from_id in dead_nodes or lk.to_id in dead_nodes
-    }
+        new_links.append(NetworkLink(
+            reverse_id,
+            lk.to_id,
+            lk.from_id,
+            lk.length,
+            set(lk.modes),
+            lk.capacity,
+            lk.freespeed,
+        ))
 
-LAYER_COLORS = {
-    "car":                 [52, 152, 219],
-    "bicycle":             [46, 204, 113],
-    "pt":                  [231, 76, 60],
-    "bicycle_disconnected": [255, 50, 50],
-    "pt_disconnected":      [255, 150, 0],
-}
+        existing.add(reverse_key)
+        added += 1
 
-def cmd_plot_network(network, source_crs="EPSG:28355"):
+    console.print(f"[dim]make_mode_bidirectional: added {added:,} reverse {mode} links[/dim]")
+    return NetworkData(network.nodes, new_links)
+
+def cmd_plot_network(network: NetworkData, source_crs: str = "EPSG:28355") -> None:
     """
     Plot MATSim network on a real Melbourne basemap.
 
-    source_crs:
-      EPSG:28355 = GDA94 / MGA Zone 55
-      EPSG:7855  = GDA2020 / MGA Zone 55
+    Adds directional arrows for bicycle links only.
     """
 
-    try:
-        from pyproj import Transformer
-    except ImportError:
-        console.print("[red]Missing dependency: pyproj[/red]")
-        console.print("[dim]Install with: pip install pyproj[/dim]")
-        return
-
-    transformer = Transformer.from_crs(
-        source_crs,
-        "EPSG:4326",
-        always_xy=True,
-    )
+    network = snap_nearby_nodes(network, radius=2.0)
+    network = make_mode_bidirectional(network, "bicycle")
+    transformer = Transformer.from_crs(source_crs, "EPSG:4326", always_xy=True)
 
     disconnected_by_mode = {
         mode: compute_disconnected_links(network, mode)
         for mode in MODES
     }
 
-    grouped = defaultdict(list)
+    sink_points: list[dict] = []
+    source_points: list[dict] = []
+
+    for mode in MODES:
+        sinks, sources = find_sinks_and_sources(network, mode)
+        console.print(
+            f"  [dim]{mode}: {len(sinks)} sinks · {len(sources)} sources[/dim]"
+        )
+
+        for node_id in sinks:
+            n = network.nodes.get(node_id)
+            if n is None:
+                continue
+            lon, lat = transformer.transform(n.x, n.y)
+            sink_points.append({
+                "position": [lon, lat],
+                "mode": mode,
+                "node": node_id,
+            })
+
+        for node_id in sources:
+            n = network.nodes.get(node_id)
+            if n is None:
+                continue
+            lon, lat = transformer.transform(n.x, n.y)
+            source_points.append({
+                "position": [lon, lat],
+                "mode": mode,
+                "node": node_id,
+            })
+
+    grouped: dict[str, list] = defaultdict(list)
+    arrow_data: list[dict] = []
 
     for lk in tqdm(network.links, desc="Collecting links"):
         fn = network.nodes.get(lk.from_id)
@@ -1016,11 +1042,70 @@ def cmd_plot_network(network, source_crs="EPSG:28355"):
             if mode not in lk.modes:
                 continue
 
-            key = f"{mode}_disconnected" if lk.link_id in disconnected_by_mode[mode] else mode
+            is_disconnected = lk.link_id in disconnected_by_mode[mode]
+            key = f"{mode}_disconnected" if is_disconnected else mode
 
             grouped[key].append({
                 "path": [[lon1, lat1], [lon2, lat2]]
             })
+
+            # Direction arrows only for disconnected bicycle links
+            if mode == "bicycle" and is_disconnected:
+                x1, y1 = fn.x, fn.y
+                x2, y2 = tn.x, tn.y
+
+                dx = x2 - x1
+                dy = y2 - y1
+                length = math.hypot(dx, dy)
+
+                if length > 0:
+                    ux = dx / length
+                    uy = dy / length
+
+                    # perpendicular
+                    px = -uy
+                    py = ux
+
+                    mx = (x1 + x2) / 2
+                    my = (y1 + y2) / 2
+
+                    arrow_len = 18.0   # metres
+                    arrow_w   = 12.0   # metres
+
+                    # triangle points: tip points from from_id -> to_id
+                    tip_x = mx + ux * arrow_len / 2
+                    tip_y = my + uy * arrow_len / 2
+
+                    base_x = mx - ux * arrow_len / 2
+                    base_y = my - uy * arrow_len / 2
+
+                    left_x = base_x + px * arrow_w / 2
+                    left_y = base_y + py * arrow_w / 2
+
+                    right_x = base_x - px * arrow_w / 2
+                    right_y = base_y - py * arrow_w / 2
+
+                    tip_lon, tip_lat = transformer.transform(tip_x, tip_y)
+                    left_lon, left_lat = transformer.transform(left_x, left_y)
+                    right_lon, right_lat = transformer.transform(right_x, right_y)
+
+                    arrow_data.append({
+                        "polygon": [
+                            [tip_lon, tip_lat],
+                            [left_lon, left_lat],
+                            [right_lon, right_lat],
+                        ],
+                        "color": [255, 50, 50],
+                        "from": lk.from_id,
+                        "to": lk.to_id,
+                        "link": lk.link_id,
+                    })
+                    
+    min_x, min_y, max_x, max_y = network.bbox
+    min_lon, min_lat = transformer.transform(min_x, min_y)
+    max_lon, max_lat = transformer.transform(max_x, max_y)
+    cx = (min_lon + max_lon) / 2
+    cy = (min_lat + max_lat) / 2
 
     layer_order = [
         "car",
@@ -1030,17 +1115,13 @@ def cmd_plot_network(network, source_crs="EPSG:28355"):
         "pt_disconnected",
     ]
 
-    min_x, min_y, max_x, max_y = network.bbox
-    min_lon, min_lat = transformer.transform(min_x, min_y)
-    max_lon, max_lat = transformer.transform(max_x, max_y)
-
-    cx = (min_lon + max_lon) / 2
-    cy = (min_lat + max_lat) / 2
+    js_data = {k: v for k, v in grouped.items() if k in layer_order}
+    js_colors = {k: LAYER_COLORS[k] for k in js_data}
+    present_layers = [l for l in layer_order if l in js_data]
 
     controls_html = ""
-    for layer in layer_order:
-        if layer not in grouped:
-            continue
+
+    for layer in present_layers:
         c = LAYER_COLORS[layer]
         controls_html += f"""
         <label>
@@ -1050,65 +1131,179 @@ def cmd_plot_network(network, source_crs="EPSG:28355"):
           {layer}
         </label>"""
 
-    js_data = {k: v for k, v in grouped.items() if k in layer_order}
-    js_colors = {k: LAYER_COLORS[k] for k in js_data}
-    present_layers = [l for l in layer_order if l in js_data]
+    if arrow_data:
+        controls_html += """
+        <label>
+          <input id="bicycle_arrows" type="checkbox" checked onchange="updateLayers()">
+          <span style="display:inline-block;width:12px;height:12px;
+            background:white;margin-right:6px;border-radius:2px;"></span>
+          bicycle arrows
+        </label>"""
+
+    if sink_points:
+        controls_html += """
+        <label>
+          <input id="sinks" type="checkbox" checked onchange="updateLayers()">
+          <span style="display:inline-block;width:12px;height:12px;
+            background:rgb(255,50,50);margin-right:6px;border-radius:50%;"></span>
+          sinks
+        </label>"""
+
+    if source_points:
+        controls_html += """
+        <label>
+          <input id="sources" type="checkbox" checked onchange="updateLayers()">
+          <span style="display:inline-block;width:12px;height:12px;
+            background:rgb(255,165,0);margin-right:6px;border-radius:50%;"></span>
+          sources
+        </label>"""
 
     html = f"""<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
 <title>MATSim Melbourne Network</title>
-
 <script src="https://unpkg.com/deck.gl@latest/dist.min.js"></script>
 <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
 <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet">
-
 <style>
 body {{ margin: 0; }}
 #map {{ width: 100vw; height: 100vh; }}
 #layer-panel {{
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    z-index: 9999;
-    background: rgba(20,20,40,0.92);
-    color: #eee;
-    padding: 12px 16px;
-    border-radius: 8px;
-    font-family: sans-serif;
-    font-size: 13px;
+    position: absolute; top: 10px; left: 10px; z-index: 9999;
+    background: rgba(20,20,40,0.92); color: #eee;
+    padding: 12px 16px; border-radius: 8px;
+    font-family: sans-serif; font-size: 13px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.5);
 }}
 #layer-panel label {{ display: block; margin: 6px 0; cursor: pointer; }}
 #layer-panel b {{ display: block; margin-bottom: 8px; color: #adf; }}
+#tooltip {{
+    position: absolute; bottom: 20px; left: 10px; z-index: 9999;
+    background: rgba(20,20,40,0.92); color: #eee;
+    padding: 6px 12px; border-radius: 6px;
+    font-family: monospace; font-size: 12px;
+    pointer-events: none; display: none;
+}}
 </style>
 </head>
-
 <body>
 <div id="map"></div>
-
 <div id="layer-panel">
-<b>Layers</b>
-{controls_html}
+  <b>Layers</b>
+  {controls_html}
 </div>
+<div id="tooltip"></div>
 
 <script>
-const layerData   = {json.dumps(js_data)};
+const layerData = {json.dumps(js_data)};
 const layerColors = {json.dumps(js_colors)};
-const layerOrder  = {json.dumps(present_layers)};
+const layerOrder = {json.dumps(present_layers)};
+const sinkData = {json.dumps(sink_points)};
+const sourceData = {json.dumps(source_points)};
+const arrowData = {json.dumps(arrow_data)};
+const tooltip = document.getElementById("tooltip");
+
+function showTip(html) {{
+  tooltip.innerHTML = html;
+  tooltip.style.display = "block";
+}}
+
+function hideTip() {{
+  tooltip.style.display = "none";
+}}
+
+const ARROW_SVG = `
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="64" height="64" viewBox="0 0 64 64">
+
+  <!-- shaft -->
+  <rect x="28" y="18" width="8" height="30" rx="3" fill="white"/>
+
+  <!-- arrow head -->
+  <polygon points="32,4 52,28 40,28 40,52 24,52 24,28 12,28"
+           fill="white"/>
+</svg>`;
+
+const ARROW_URL = "data:image/svg+xml;base64," + btoa(ARROW_SVG);
 
 function makeLayers() {{
-  return layerOrder.map(id => new deck.PathLayer({{
-    id,
-    data: layerData[id],
-    getPath: d => d.path,
-    getColor: layerColors[id],
-    getWidth: 2,
-    widthMinPixels: 1,
-    pickable: false,
-    visible: document.getElementById(id)?.checked ?? true,
-  }}));
+  const layers = layerOrder
+    .filter(id => document.getElementById(id)?.checked ?? true)
+    .map(id => new deck.PathLayer({{
+      id,
+      data: layerData[id],
+      getPath: d => d.path,
+      getColor: layerColors[id],
+      getWidth: 2,
+      widthMinPixels: 1,
+      pickable: false,
+    }}));
+
+    if ((document.getElementById("bicycle_arrows")?.checked ?? true) && arrowData.length) {{
+    layers.push(new deck.PolygonLayer({{
+        id: "bicycle_arrows",
+        data: arrowData,
+
+        getPolygon: d => d.polygon,
+
+        getFillColor: d => d.color,
+        getLineColor: d => d.color,
+
+        getLineWidth: 1,
+        lineWidthMinPixels: 1,
+
+        stroked: true,
+        filled: true,
+
+        pickable: true,
+
+        onHover: ({{object}}) => {{
+        if (object)
+            showTip(`BIKE LINK | ${{object.from}} → ${{object.to}} | ${{object.link}}`);
+        else
+            hideTip();
+        }},
+    }}));
+    }}
+  const sinksChecked = document.getElementById("sinks")?.checked ?? true;
+  const sourcesChecked = document.getElementById("sources")?.checked ?? true;
+
+  if (sinksChecked && sinkData.length) {{
+    layers.push(new deck.ScatterplotLayer({{
+      id: "sinks",
+      data: sinkData,
+      getPosition: d => d.position,
+      getFillColor: [255, 50, 50],
+      getRadius: 12,
+      radiusMinPixels: 4,
+      radiusMaxPixels: 18,
+      pickable: true,
+      onHover: ({{object}}) => {{
+        if (object) showTip(`SINK &nbsp;|&nbsp; mode: ${{object.mode}} &nbsp;|&nbsp; node: ${{object.node}}`);
+        else hideTip();
+      }},
+    }}));
+  }}
+
+  if (sourcesChecked && sourceData.length) {{
+    layers.push(new deck.ScatterplotLayer({{
+      id: "sources",
+      data: sourceData,
+      getPosition: d => d.position,
+      getFillColor: [255, 165, 0],
+      getRadius: 12,
+      radiusMinPixels: 4,
+      radiusMaxPixels: 18,
+      pickable: true,
+      onHover: ({{object}}) => {{
+        if (object) showTip(`SOURCE &nbsp;|&nbsp; mode: ${{object.mode}} &nbsp;|&nbsp; node: ${{object.node}}`);
+        else hideTip();
+      }},
+    }}));
+  }}
+
+  return layers;
 }}
 
 const deckgl = new deck.DeckGL({{
@@ -1120,10 +1315,11 @@ const deckgl = new deck.DeckGL({{
     latitude: {cy},
     zoom: 10,
     pitch: 0,
-    bearing: 0
+    bearing: 0,
   }},
   controller: true,
-  layers: makeLayers()
+  layers: makeLayers(),
+  getTooltip: null,
 }});
 
 function updateLayers() {{
@@ -1137,28 +1333,17 @@ function updateLayers() {{
     with open(html_file, "w", encoding="utf-8") as f:
         f.write(html)
 
-    console.print(f"[dim]Opening basemap plot: {html_file}[/dim]")
+    console.print(f"[dim]Saved: {html_file}[/dim]")
+
 
 def cmd_plot(agents: dict[str, Agent], metric: str = "distance",
              mode_filter: Optional[str] = None) -> None:
-    """Open an interactive Plotly chart in the browser.
-
-    Charts produced
-    ───────────────
-    distance   – stacked bar: total distance per mode (normal + deadend) per agent
-    duration   – stacked bar: total travel time per mode (normal + deadend) per agent
-    trips      – bar: trip count per agent, coloured by main mode split
-    scatter    – distance vs duration scatter, one point per trip, coloured by mode/deadend
-    mode_split – population-level pie: mode share by distance (normal vs deadend)
-
-    For the network diagram use cmd_plot_network() directly (via do_plot in the shell).
-    """
+    """Open an interactive Plotly chart in the browser."""
     valid = ("distance", "duration", "trips", "scatter", "mode_split")
     if metric not in valid:
         console.print(f"[red]Unknown metric '{metric}'. Choose: {', '.join(valid)}[/red]")
         return
 
-    # ── Agent-level plots ─────────────────────────────────────────────────
     sel = list(agents.values())
     if mode_filter:
         sel = [a for a in sel if mode_filter.lower() in a.modes_used]
@@ -1341,10 +1526,11 @@ HELP_TEXT = """
   [cyan]mode[/cyan] [dim]<mode>[/dim]                           Mode statistics
   [cyan]plot[/cyan] [dim][distance|duration|trips|scatter|mode_split][/dim]  Interactive Plotly chart
        [dim][--mode MODE][/dim]  (dead-ends shown separately in legend)
-  [cyan]plot network[/cyan] [dim][--mode MODE][/dim]            Road network diagram
-       [dim]Parses output_network.xml automatically.[/dim]
-       [dim]Links coloured by primary mode. Toggle layers via legend.[/dim]
-       [dim]Scroll to zoom · drag to pan · hover links for details.[/dim]
+  [cyan]plot network[/cyan]                        Road network diagram
+       [dim]Links coloured by primary mode. Toggle layers via panel.[/dim]
+       [dim]Red dots = sinks (can arrive, can't leave).[/dim]
+       [dim]Orange dots = sources (can leave, can't arrive).[/dim]
+       [dim]Hover dots for node ID. Scroll to zoom · drag to pan.[/dim]
   [cyan]status[/cyan]                              Show what is loaded
   [cyan]help[/cyan]                               This message
   [cyan]quit[/cyan] / [cyan]exit[/cyan]                          Exit
@@ -1439,27 +1625,13 @@ class MatsimShell(cmd.Cmd):
         cmd_mode_stats(self._agents, args[0])
 
     def do_plot(self, line: str):
-        """plot [distance|duration|trips|scatter|mode_split|network] [--mode MODE]
-  Open an interactive Plotly chart in the browser.
-
-  Metrics:
-    distance   – stacked distance per agent by mode
-    duration   – stacked duration per agent by mode
-    trips      – trip count per agent by mode
-    scatter    – leg distance vs duration
-    mode_split – population pie chart
-    network    – road network diagram (reads output_network.xml)
-
-  --mode MODE  filter to agents/links using that mode
-  Dead-end legs shown separately with hatched bars / x markers."""
+        """plot [distance|duration|trips|scatter|mode_split|network] [--mode MODE]"""
         args = self._args(line)
         metric = "distance"
         if args and not args[0].startswith("--"):
             metric, args = args[0], args[1:]
         mode_filter, args = self._flag(args, "--mode", None)
 
-        # Network plot does not need plans data at all — bypass self._agents
-        # so the plans file is never parsed just to render the network.
         if metric == "network":
             net = self._sim.network
             if net is None:
@@ -1586,7 +1758,7 @@ def main():
 
     console.print()
     console.print(Panel.fit(
-        f"[bold white]matsim-query[/bold white]  [dim]v1.1[/dim]\n"
+        f"[bold white]matsim-query[/bold white]  [dim]v1.2[/dim]\n"
         f"[dim]{sim.plans_path}[/dim]"
         f"{net_status}\n"
         f"[dim]Type [/dim][cyan]help[/cyan][dim] for commands · [/dim][cyan]quit[/cyan][dim] to exit[/dim]",
@@ -1602,6 +1774,67 @@ def main():
     shell = MatsimShell(sim)
     shell.cmdloop_with_interrupt()
 
+def apply_node_remapping(network: NetworkData, remapping: dict[str, str]) -> NetworkData:
+    """
+    Return a new NetworkData with link endpoints rewritten per remapping.
+    Links that become self-loops after remapping are dropped.
+    """
+    new_links = []
+    dropped = 0
+    for lk in network.links:
+        from_id = remapping.get(lk.from_id, lk.from_id)
+        to_id   = remapping.get(lk.to_id,   lk.to_id)
+        if from_id == to_id:          # self-loop → drop
+            dropped += 1
+            continue
+        new_links.append(NetworkLink(
+            lk.link_id, from_id, to_id,
+            lk.length, lk.modes, lk.capacity, lk.freespeed,
+        ))
+    if dropped:
+        console.print(f"[dim]Dropped {dropped} self-loop links after remapping.[/dim]")
+    return NetworkData(network.nodes, new_links)
+
+def snap_nearby_nodes(network: NetworkData, radius: float = 2.0) -> NetworkData:
+    """
+    Merge nodes within `radius` metres of each other into a single node.
+    Uses a KDTree for O(n log n) performance — safe for large networks.
+    """
+
+    # count links per node so we keep the "busiest" one
+    link_count: Counter = Counter()
+    for lk in network.links:
+        link_count[lk.from_id] += 1
+        link_count[lk.to_id]   += 1
+
+    node_list = list(network.nodes.values())
+    node_ids  = [n.node_id for n in node_list]
+    coords    = np.array([(n.x, n.y) for n in node_list])
+
+    tree  = KDTree(coords)
+    pairs = tree.query_pairs(r=radius)   # all (i, j) pairs within radius
+
+    # build remapping — resolve chains so A→B→C becomes A→C
+    remapping: dict[str, str] = {}
+
+    def canonical(nid: str) -> str:
+        while nid in remapping:
+            nid = remapping[nid]
+        return nid
+
+    for i, j in pairs:
+        a_id = canonical(node_ids[i])
+        b_id = canonical(node_ids[j])
+        if a_id == b_id:
+            continue
+        # keep whichever has more links
+        if link_count[b_id] > link_count[a_id]:
+            remapping[a_id] = b_id
+        else:
+            remapping[b_id] = a_id
+
+    console.print(f"[dim]snap_nearby_nodes: {len(remapping):,} nodes merged at radius={radius}m[/dim]")
+    return apply_node_remapping(network, remapping)
 
 if __name__ == "__main__":
     main()
